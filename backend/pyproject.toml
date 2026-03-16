@@ -1,0 +1,15 @@
+[project]
+name = "smartfiles"
+version = "0.1.0"
+description = "AI-powered semantic search for document folders"
+dependencies = [
+    "typer",
+    "fastapi",
+    "uvicorn",
+    "sentence-transformers",
+    "chromadb",
+    "pypdf"
+]
+
+[project.scripts]
+smartfiles = "smartfiles.cli.main:app"
