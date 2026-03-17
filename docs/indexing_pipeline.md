@@ -7,16 +7,21 @@ The indexing pipeline converts documents into searchable vector embeddings.
 ### 1. File Scanning
 Detect new or modified files.
 
-Supported types:
+Initial supported types (implemented):
 - PDF
-- DOCX
 - PNG
 - JPG
+
+Planned (not yet implemented):
+- DOCX
 
 ### 2. Text Extraction
 PDF parsing using pypdf.
 
-OCR fallback using pytesseract.
+PNG / JPG:
+- OCR using pytesseract (via Pillow image loading)
+
+If OCR dependencies are not installed, image files are currently skipped (no text extracted).
 
 ### 3. Text Cleaning
 Normalize text:
@@ -25,8 +30,10 @@ Normalize text:
 
 ### 4. Chunking
 
-chunk_size = 500 tokens
-overlap = 50 tokens
+Current implementation uses simple word-based chunks as an approximation of tokens:
+
+- chunk_size ≈ 500 words
+- overlap ≈ 50 words
 
 Small documents may use page-level chunks.
 

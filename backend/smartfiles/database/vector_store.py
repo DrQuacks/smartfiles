@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+import os
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any, Dict, List
+
+import chromadb
+from chromadb.config import Settings
+
+from smartfiles.ingestion.chunker import DocumentChunk
+
+
+DEFAULT_DB_DIR = Path(os.path.expanduser("~")) / ".smartfiles" / "database"
+DEFAULT_COLLECTION_NAME = "documents"
+
+
+class ChromaVectorStore:
+    def __init__(self, db_path: Path, collection_name: str = DEFAULT_COLLECTION_NAME):
+        db_path = db_path.expanduser().resolve()
+        db_path.mkdir(parents=True, exist_ok=True)
+
+        self._client = chromadb.PersistentClient(path=str(db_path), settings=Settings())
+        self._collection = self._client.get_or_create_collection(name=collection_name)
+
+    def reset(self) -> None:
+        self._client.delete_collection(name=self._collection.name)
+        self._collection = self._client.get_or_create_collection(name=self._collection.name)
+
+    def add_documents(self, chunks: List[DocumentChunk], embeddings: List[List[float]]) -> None:
+        if not chunks:
+            return
+        if len(chunks) != len(embeddings):
+            raise ValueError("Chunks and embeddings length mismatch")
+
+        ids = [c.id for c in chunks]
+        texts = [c.text for c in chunks]
+        metadatas: List[Dict[str, Any]] = []
+        for c in chunks:
+            meta = {
+                "filepath": c.filepath,
+                "chunk_index": c.chunk_index,
+            }
+            metadatas.append(meta)
+
+        self._collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+
+    def search(self, query_embedding: List[float], k: int = 5) -> List[Dict[str, Any]]:
+        if not query_embedding:
+            return []
+        result = self._collection.query(query_embeddings=[query_embedding], n_results=k)
+        hits: List[Dict[str, Any]] = []
+        ids = result.get("ids", [[]])[0]
+        docs = result.get("documents", [[]])[0]
+        metadatas = result.get("metadatas", [[]])[0]
+        distances = result.get("distances", [[]])[0]
+
+        for _id, doc, meta, dist in zip(ids, docs, metadatas, distances):
+            score = float(100 * (1 - dist)) if dist is not None else 0.0
+            item: Dict[str, Any] = {
+                "id": _id,
+                "text": doc,
+                "score": score,
+            }
+            if isinstance(meta, dict):
+                item.update(meta)
+            hits.append(item)
+
+        return hits
+
+
+def get_default_vector_store(*, recreate: bool = False) -> ChromaVectorStore:
+    store = ChromaVectorStore(db_path=DEFAULT_DB_DIR)
+    if recreate:
+        store.reset()
+    return store

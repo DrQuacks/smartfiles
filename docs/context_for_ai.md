@@ -214,12 +214,15 @@ Steps:
 
 1. Scan folders for supported files
 
-Supported formats:
+Supported formats (initial implementation):
 
 PDF  
-DOCX  
 PNG  
 JPG
+
+Planned (not yet implemented):
+
+DOCX
 
 2. Extract text
 
@@ -261,6 +264,10 @@ If "Saint Ignatius" appears → school = SI
 6. Generate embeddings
 
 embedding = embed(chunk.text)
+
+Current model:
+
+BAAI/bge-small-en-v1 (via sentence-transformers)
 
 7. Store vectors
 

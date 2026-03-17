@@ -8,7 +8,9 @@ dependencies = [
     "uvicorn",
     "sentence-transformers",
     "chromadb",
-    "pypdf"
+    "pypdf",
+    "pillow",
+    "pytesseract"
 ]
 
 [project.scripts]
