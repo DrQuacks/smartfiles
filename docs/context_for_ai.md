@@ -100,6 +100,8 @@ Command line interface.
 
 Example commands:
 
+smartfiles extract ~/Documents  
+smartfiles index-from-text ~/Documents  
 smartfiles index ~/Documents  
 smartfiles search "precalc worksheet"
 

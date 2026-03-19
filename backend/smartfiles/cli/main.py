@@ -1,20 +1,45 @@
 import pathlib
-from typing import Optional
 
 import typer
 
-from smartfiles.ingestion.indexer import run_indexing_pipeline
+from smartfiles.ingestion.indexer import (
+    run_indexing_pipeline,
+    extract_documents,
+    build_index_from_corpus,
+)
 from smartfiles.search.search_engine import run_search
 
 app = typer.Typer(help="SmartFiles CLI: index and search your documents.")
 
 
 @app.command()
+def extract(
+    folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder to parse"),
+    recreate_text: bool = typer.Option(
+        False,
+        "--recreate-text",
+        help="Delete and rebuild the raw text corpus before extracting.",
+    ),
+):
+    """Only parse documents and write raw text files to the corpus."""
+    extract_documents(root_folder=folder, recreate_text=recreate_text)
+
+
+@app.command()
+def index_from_text(
+    folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder whose extracted text should be indexed"),
+    recreate: bool = typer.Option(False, "--recreate", help="Recreate the vector index before indexing."),
+):
+    """Chunk, embed, and index using the existing raw text corpus."""
+    build_index_from_corpus(root_folder=folder, recreate_index=recreate)
+
+
+@app.command()
 def index(
     folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder to index"),
-    recreate: bool = typer.Option(False, "--recreate", help="Recreate the index from scratch"),
+    recreate: bool = typer.Option(False, "--recreate", help="Recreate both corpus and index from scratch"),
 ):
-    """Index all supported documents in the given folder."""
+    """Run the full pipeline: extract text, chunk, embed, and index."""
     run_indexing_pipeline(root_folder=folder, recreate=recreate)
 
 

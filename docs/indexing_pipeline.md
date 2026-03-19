@@ -57,8 +57,20 @@ In addition, the full raw text for each document is written to a local
 "corpus" directory for inspection and debugging:
 
 - Location: `~/.smartfiles/corpus/`
-- Structure: mirrors the folder passed to `smartfiles index`, with files
-	saved as UTF-8 `.txt`.
+- Structure: mirrors the folder passed to the CLI, with files saved as
+	UTF-8 `.txt` (filenames keep their original extension and add
+	`.txt`, e.g. `file.pdf` → `file.pdf.txt`).
 
 This makes it easy to open a `.txt` file and validate that text
 extraction (PDF parsing or OCR) is working as expected.
+
+### 8. Pipeline Modes
+
+The CLI exposes three ways to run the pipeline:
+
+- `smartfiles extract <folder>` – only parse documents and write raw
+	text files to the corpus.
+- `smartfiles index-from-text <folder>` – read the existing corpus for
+	`<folder>`, chunk, embed, and update the vector index.
+- `smartfiles index <folder>` – run extraction and indexing together in
+	one pass (recreates corpus and index when `--recreate` is used).
