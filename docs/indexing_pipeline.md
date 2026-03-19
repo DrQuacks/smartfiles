@@ -56,7 +56,9 @@ Embeddings and metadata stored in vector database.
 In addition, the full raw text for each document is written to a local
 "corpus" directory for inspection and debugging:
 
-- Location: `~/.smartfiles/corpus/`
+- Base path: `<DATA_DIR>/corpus/`, where `DATA_DIR` comes from the
+	`SMARTFILES_DATA_DIR` environment variable (or defaults to
+	`~/.smartfiles` when unset).
 - Structure: mirrors the folder passed to the CLI, with files saved as
 	UTF-8 `.txt` (filenames keep their original extension and add
 	`.txt`, e.g. `file.pdf` → `file.pdf.txt`).

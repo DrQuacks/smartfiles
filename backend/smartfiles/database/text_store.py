@@ -4,7 +4,9 @@ import shutil
 from pathlib import Path
 from typing import Iterator, Tuple
 
-DEFAULT_TEXT_DIR = Path.home() / ".smartfiles" / "corpus"
+from smartfiles.config import get_data_dir
+
+DEFAULT_TEXT_DIR = get_data_dir() / "corpus"
 
 
 def reset_text_corpus() -> None:

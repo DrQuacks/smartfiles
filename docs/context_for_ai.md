@@ -294,14 +294,23 @@ filepath
 page_number  
 metadata
 
-Database location:
+Database location (configurable):
 
-~/.smartfiles/database/
+By default, SmartFiles stores its data under:
 
-In parallel with the vector database, SmartFiles also maintains a plain
+~/.smartfiles/
+
+This base directory can be overridden with the environment variable
+`SMARTFILES_DATA_DIR`. Within that directory, the vector database and
+corpus are stored as:
+
+- Vector DB: `<DATA_DIR>/database/`
+- Text corpus: `<DATA_DIR>/corpus/`
+
+In parallel with the vector database, SmartFiles maintains a plain
 text corpus for validation and debugging:
 
-- Location: `~/.smartfiles/corpus/`
+- Location: `<DATA_DIR>/corpus/`
 - Contents: one UTF-8 `.txt` file per indexed document containing the
 	full raw extracted text (after parsing/OCR, before chunking).
 

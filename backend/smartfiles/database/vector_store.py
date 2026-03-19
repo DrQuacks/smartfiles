@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import os
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List
 
 import chromadb
 from chromadb.config import Settings
 
+from smartfiles.config import get_data_dir
 from smartfiles.ingestion.chunker import DocumentChunk
 
-
-DEFAULT_DB_DIR = Path(os.path.expanduser("~")) / ".smartfiles" / "database"
+DEFAULT_DB_DIR = get_data_dir() / "database"
 DEFAULT_COLLECTION_NAME = "documents"
 
 

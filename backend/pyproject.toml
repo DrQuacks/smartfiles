@@ -10,7 +10,8 @@ dependencies = [
     "chromadb",
     "pypdf",
     "pillow",
-    "pytesseract"
+    "pytesseract",
+    "numpy<2"
 ]
 
 [project.scripts]

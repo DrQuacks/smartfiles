@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: smartfiles
+Version: 0.1.0
+Summary: AI-powered semantic search for document folders
+Requires-Dist: typer
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: sentence-transformers
+Requires-Dist: chromadb
+Requires-Dist: pypdf
+Requires-Dist: pillow
+Requires-Dist: pytesseract

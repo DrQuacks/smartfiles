@@ -1,0 +1,8 @@
+typer
+fastapi
+uvicorn
+sentence-transformers
+chromadb
+pypdf
+pillow
+pytesseract

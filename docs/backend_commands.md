@@ -10,10 +10,17 @@ cd /Users/Kellar/Develop/Projects/smartfiles/backend
 source .venv/bin/activate
 ```
 
-Install the backend package in editable mode (and dependencies):
+Install the backend package in editable mode (Python dependencies):
 
 ```bash
 pip install -e .
+```
+
+For image OCR support (PNG/JPG), install the Tesseract binary
+(optional but recommended):
+
+```bash
+brew install tesseract
 ```
 
 ## CLI (Indexing & Search)
@@ -46,6 +53,33 @@ smartfiles search "your query here"        # default top-k = 5
 smartfiles search -k 10 "your query here" # custom k
 ```
 
+## Inspecting Raw Extracted Text
+
+When you run `smartfiles extract` or the full `smartfiles index` pipeline,
+the full per-document text (after PDF parsing / OCR, before chunking) is
+written to a local corpus directory under the SmartFiles data dir.
+
+By default, the data dir is:
+
+```bash
+~/.smartfiles
+```
+
+You can override it with the `SMARTFILES_DATA_DIR` environment variable.
+Within the data dir, the corpus lives at `corpus/`:
+
+- Location: `$SMARTFILES_DATA_DIR/corpus/` (or `~/.smartfiles/corpus/`
+	if the env var is unset).
+- Structure: mirrors the folder you passed to the CLI; each document like
+	`some/file.pdf` becomes `some/file.pdf.txt`.
+
+On macOS you can open the corpus in Finder with (adjust if you change
+`SMARTFILES_DATA_DIR`):
+
+```bash
+open ~/.smartfiles/corpus
+```
+
 ## Backend Server (planned)
 
 Once the FastAPI server is implemented in `smartfiles.server.api`, run:
@@ -55,3 +89,25 @@ uvicorn smartfiles.server.api:app --reload
 ```
 
 (See `docs/context_for_ai.md` and `docs/search_system.md` for server design details.)
+
+## Troubleshooting
+
+- **NumPy ABI error (1.x vs 2.x):** if you see an error about a module
+	compiled with NumPy 1.x not working with NumPy 2, pin NumPy inside the
+	backend virtualenv:
+
+	```bash
+	cd /Users/Kellar/Develop/Projects/smartfiles/backend
+	source .venv/bin/activate
+	pip install "numpy<2"
+	```
+
+- **Folders with spaces in the path:** when passing a folder to the
+	CLI on macOS, quote or escape spaces so Typer sees the correct
+	directory, for example:
+
+	```bash
+	smartfiles extract "/Users/Kellar/Desktop/Tutoring Docs/Science"
+	# or
+	smartfiles extract /Users/Kellar/Desktop/Tutoring\ Docs/Science
+	```
