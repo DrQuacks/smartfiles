@@ -52,3 +52,13 @@ bge-small-en
 ### 7. Storage
 
 Embeddings and metadata stored in vector database.
+
+In addition, the full raw text for each document is written to a local
+"corpus" directory for inspection and debugging:
+
+- Location: `~/.smartfiles/corpus/`
+- Structure: mirrors the folder passed to `smartfiles index`, with files
+	saved as UTF-8 `.txt`.
+
+This makes it easy to open a `.txt` file and validate that text
+extraction (PDF parsing or OCR) is working as expected.

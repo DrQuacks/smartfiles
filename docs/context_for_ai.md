@@ -296,6 +296,16 @@ Database location:
 
 ~/.smartfiles/database/
 
+In parallel with the vector database, SmartFiles also maintains a plain
+text corpus for validation and debugging:
+
+- Location: `~/.smartfiles/corpus/`
+- Contents: one UTF-8 `.txt` file per indexed document containing the
+	full raw extracted text (after parsing/OCR, before chunking).
+
+This corpus is regenerated when running `smartfiles index` with
+`--recreate`.
+
 ---
 
 # Search Behavior
