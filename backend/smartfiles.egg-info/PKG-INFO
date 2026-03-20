@@ -13,3 +13,5 @@ Requires-Dist: pytesseract
 Requires-Dist: pdf2image
 Requires-Dist: numpy<2
 Requires-Dist: python-docx
+Requires-Dist: pytest
+Requires-Dist: pytest-cov

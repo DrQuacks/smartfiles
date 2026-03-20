@@ -13,7 +13,9 @@ dependencies = [
     "pytesseract",
     "pdf2image",
     "numpy<2",
-    "python-docx"
+    "python-docx",
+    "pytest",
+    "pytest-cov"
 ]
 
 [project.scripts]

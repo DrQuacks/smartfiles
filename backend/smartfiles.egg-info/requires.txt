@@ -9,3 +9,5 @@ pytesseract
 pdf2image
 numpy<2
 python-docx
+pytest
+pytest-cov
