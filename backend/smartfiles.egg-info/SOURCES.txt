@@ -1,5 +1,7 @@
 pyproject.toml
 smartfiles/__init__.py
+smartfiles/config.py
+smartfiles/folder_registry.py
 smartfiles.egg-info/PKG-INFO
 smartfiles.egg-info/SOURCES.txt
 smartfiles.egg-info/dependency_links.txt

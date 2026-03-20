@@ -6,3 +6,5 @@ chromadb
 pypdf
 pillow
 pytesseract
+pdf2image
+numpy<2

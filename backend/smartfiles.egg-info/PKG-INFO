@@ -10,3 +10,5 @@ Requires-Dist: chromadb
 Requires-Dist: pypdf
 Requires-Dist: pillow
 Requires-Dist: pytesseract
+Requires-Dist: pdf2image
+Requires-Dist: numpy<2

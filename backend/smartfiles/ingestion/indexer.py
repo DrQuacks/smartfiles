@@ -17,7 +17,7 @@ from smartfiles.ingestion.text_extractor import get_default_extractor
 from smartfiles.ingestion.chunker import chunk_document
 
 
-def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False, pdf_ocr: bool = False) -> None:
+def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False) -> None:
     """Parse supported documents and write raw text files to the corpus.
 
     This stage is useful on its own to debug PDF parsing and OCR
@@ -32,7 +32,7 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False,
     if recreate_text:
         reset_text_corpus(root_folder)
 
-    extractor = get_default_extractor(pdf_ocr_fallback=pdf_ocr)
+    extractor = get_default_extractor()
     paths = list(iter_files(root_folder))
     if not paths:
         print(f"No supported files found under {root_folder}.")
@@ -182,10 +182,10 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
         print("Index build complete.")
 
 
-def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False, pdf_ocr: bool = False) -> None:
+def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False) -> None:
     """Run extraction and index build as a single end-to-end pipeline."""
 
     # For a full run we recreate both the text corpus and the index
     # when requested.
-    extract_documents(root_folder=root_folder, recreate_text=recreate, pdf_ocr=pdf_ocr)
+    extract_documents(root_folder=root_folder, recreate_text=recreate)
     build_index_from_corpus(root_folder=root_folder, recreate_index=recreate)

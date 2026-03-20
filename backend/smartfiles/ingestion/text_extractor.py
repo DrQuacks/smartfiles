@@ -6,7 +6,7 @@ from typing import Protocol
 import pypdf
 
 try:  # Optional dependencies for image OCR and PDF OCR fallback
-    from PIL import Image, ImageFile, UnidentifiedImageError  # type: ignore
+    from PIL import Image, ImageFile, ImageOps, UnidentifiedImageError  # type: ignore
     import pytesseract  # type: ignore
     try:
         from pdf2image import convert_from_path  # type: ignore
@@ -29,13 +29,17 @@ class TextExtractor(Protocol):
 
 
 class DefaultTextExtractor:
-    """Extract text from PDFs and images (PNG/JPG) with optional OCR.
+    """Extract text from PDFs and images (PNG/JPG) with OCR.
 
-    If `pdf_ocr_fallback` is True, then for PDFs that yield no text via
-    pypdf, we render pages to images and run Tesseract as a fallback.
+    For PDFs we always try pypdf's text layer first. If that yields no
+    text, we first try a standard OCR pass and, if that still produces
+    no text, automatically fall back to a stronger OCR path with higher
+    DPI rendering and simple preprocessing.
     """
 
-    def __init__(self, pdf_ocr_fallback: bool = False) -> None:
+    def __init__(self, pdf_ocr_fallback: bool = True) -> None:
+        # We keep `pdf_ocr_fallback` for flexibility, but the default
+        # is to enable the OCR fallback for PDFs.
         self._pdf_ocr_fallback = pdf_ocr_fallback
 
     def extract_text(self, path: pathlib.Path) -> str:
@@ -62,24 +66,48 @@ class DefaultTextExtractor:
         if not self._pdf_ocr_fallback or Image is None or pytesseract is None or convert_from_path is None:
             return joined
 
-        ocr_texts: list[str] = []
-        try:
-            images = convert_from_path(str(path))  # type: ignore[arg-type]
-        except Exception:
-            return joined
-
-        for img in images:
+        # Tier 1: standard OCR on rendered pages.
+        def _ocr_pages(dpi: int, strong: bool) -> str:
             try:
-                img = img.convert("RGB")
-                ocr_text = pytesseract.image_to_string(img)  # type: ignore[arg-type]
+                images = convert_from_path(str(path), dpi=dpi)  # type: ignore[arg-type]
             except Exception:
-                ocr_text = ""
-            if ocr_text:
-                ocr_texts.append(ocr_text)
+                return ""
 
-        if not ocr_texts:
-            return joined
-        return "\n".join(ocr_texts)
+            ocr_texts: list[str] = []
+            for img in images:
+                try:
+                    img = img.convert("RGB")
+                    if strong:
+                        # Lightweight preprocessing for scanned pages.
+                        gray = img.convert("L")
+                        gray = ImageOps.autocontrast(gray)
+                        w, h = gray.size
+                        if max(w, h) < 2000:
+                            scale = 1.5
+                            gray = gray.resize((int(w * scale), int(h * scale)))
+                        ocr_img = gray
+                        config = "--oem 1 --psm 6 --dpi 300"
+                        text = pytesseract.image_to_string(ocr_img, config=config)  # type: ignore[arg-type]
+                    else:
+                        text = pytesseract.image_to_string(img)  # type: ignore[arg-type]
+                except Exception:
+                    text = ""
+                if text:
+                    ocr_texts.append(text)
+
+            return "\n".join(ocr_texts) if ocr_texts else ""
+
+        # First, try a standard OCR pass.
+        basic = _ocr_pages(dpi=200, strong=False)
+        if basic.strip():
+            return basic
+
+        # If that fails to produce any text, escalate to strong OCR.
+        strong_text = _ocr_pages(dpi=300, strong=True)
+        if strong_text.strip():
+            return strong_text
+
+        return joined
 
     def _extract_image(self, path: pathlib.Path) -> str:
         if Image is None or pytesseract is None:
@@ -102,5 +130,8 @@ class DefaultTextExtractor:
         return text or ""
 
 
-def get_default_extractor(pdf_ocr_fallback: bool = False) -> DefaultTextExtractor:
-    return DefaultTextExtractor(pdf_ocr_fallback=pdf_ocr_fallback)
+def get_default_extractor() -> DefaultTextExtractor:
+    # By default, enable the PDF OCR fallback (including the strong
+    # secondary pass) so users get the best extraction behavior without
+    # needing to pass extra flags.
+    return DefaultTextExtractor(pdf_ocr_fallback=True)
