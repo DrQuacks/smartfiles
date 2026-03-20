@@ -11,6 +11,7 @@ from smartfiles.database.text_store import (
     iter_corpus_documents,
     get_next_stats_file_path,
 )
+from smartfiles.folder_registry import ensure_folder_entry, update_folder_metadata
 from smartfiles.ingestion.file_scanner import iter_files
 from smartfiles.ingestion.text_extractor import get_default_extractor
 from smartfiles.ingestion.chunker import chunk_document
@@ -22,6 +23,11 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     This stage is useful on its own to debug PDF parsing and OCR
     without running embeddings or touching the vector index.
     """
+
+    # Ensure there is a registry entry for this root folder and get
+    # the canonical absolute path.
+    entry = ensure_folder_entry(root_folder)
+    root_folder = pathlib.Path(entry.path)
 
     if recreate_text:
         reset_text_corpus(root_folder)
@@ -56,7 +62,8 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     except Exception:  # pragma: no cover - defensive
         pass
 
-    timestamp = datetime.now().isoformat()
+    start_time = datetime.now()
+    timestamp = start_time.isoformat()
     data_dir = os.getenv("SMARTFILES_DATA_DIR", "~/.smartfiles (default)")
 
     header_lines = [
@@ -91,6 +98,15 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
         with stats_path.open("a", encoding="utf-8") as f:
             f.write(f"[OK] {path}\n")
             f.write(f"  extracted_chars={len(text)}\n\n")
+
+    # Record total duration and update registry metadata.
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+    with stats_path.open("a", encoding="utf-8") as f:
+        f.write("---\n")
+        f.write(f"Total duration_seconds={duration:.3f}\n")
+
+    update_folder_metadata(root_folder, last_indexed=end_time.isoformat(), last_commit=commit)
 
     print("Extraction complete.")
 

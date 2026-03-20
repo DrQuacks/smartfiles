@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterator, Tuple
 
 from smartfiles.config import get_data_dir
+from smartfiles.folder_registry import get_raw_text_dir_name
 
 
 def _get_run_base_dir(root_folder: Path) -> Path:
@@ -18,8 +19,8 @@ def _get_run_base_dir(root_folder: Path) -> Path:
     """
 
     data_dir = get_data_dir()
-    folder_name = root_folder.expanduser().resolve().name
-    return data_dir / f"{folder_name}_rawText"
+    folder_name = get_raw_text_dir_name(root_folder)
+    return data_dir / folder_name
 
 
 def get_corpus_dir(root_folder: Path) -> Path:
@@ -96,7 +97,7 @@ def iter_corpus_documents(root_folder: Path) -> Iterator[Tuple[Path, str]]:
 
     corpus_dir = get_corpus_dir(root_folder)
     for txt_path in corpus_dir.rglob("*.txt"):
-        rel_txt = txt_path.relative_to(DEFAULT_TEXT_DIR)
+        rel_txt = txt_path.relative_to(corpus_dir)
         rel_str = str(rel_txt)
         if not rel_str.endswith(".txt"):
             continue
