@@ -55,9 +55,10 @@ smartfiles search -k 10 "your query here" # custom k
 
 ## Inspecting Raw Extracted Text
 
-When you run `smartfiles extract` or the full `smartfiles index` pipeline,
-the full per-document text (after PDF parsing / OCR, before chunking) is
-written to a local corpus directory under the SmartFiles data dir.
+When you run `smartfiles extract` or the full `smartfiles index`
+pipeline, the full per-document text (after PDF parsing / OCR, before
+chunking) is written to a corpus directory under the SmartFiles data
+dir, namespaced by the root folder's name.
 
 By default, the data dir is:
 
@@ -65,19 +66,20 @@ By default, the data dir is:
 ~/.smartfiles
 ```
 
-You can override it with the `SMARTFILES_DATA_DIR` environment variable.
-Within the data dir, the corpus lives at `corpus/`:
+You can override it with the `SMARTFILES_DATA_DIR` environment
+variable. Within the data dir, each root folder gets its own
+`<folder_name>_rawText` tree:
 
-- Location: `$SMARTFILES_DATA_DIR/corpus/` (or `~/.smartfiles/corpus/`
-	if the env var is unset).
+- Corpus: `$SMARTFILES_DATA_DIR/<folder_name>_rawText/corpus/`
+- Stats: `$SMARTFILES_DATA_DIR/<folder_name>_rawText/stats/`
 - Structure: mirrors the folder you passed to the CLI; each document like
 	`some/file.pdf` becomes `some/file.pdf.txt`.
 
-On macOS you can open the corpus in Finder with (adjust if you change
-`SMARTFILES_DATA_DIR`):
+On macOS you can open the default corpus location in Finder with (for a
+folder named `Documents`, for example):
 
 ```bash
-open ~/.smartfiles/corpus
+open ~/.smartfiles/Documents_rawText/corpus
 ```
 
 ## Backend Server (planned)

@@ -53,15 +53,20 @@ bge-small-en
 
 Embeddings and metadata stored in vector database.
 
-In addition, the full raw text for each document is written to a local
-"corpus" directory for inspection and debugging:
+In addition, the full raw text for each document is written to a
+per-folder "corpus" directory for inspection and debugging:
 
-- Base path: `<DATA_DIR>/corpus/`, where `DATA_DIR` comes from the
-	`SMARTFILES_DATA_DIR` environment variable (or defaults to
-	`~/.smartfiles` when unset).
+- Base path: `<DATA_DIR>/<folder_name>_rawText/corpus/`, where
+	`DATA_DIR` comes from the `SMARTFILES_DATA_DIR` environment variable
+	(or defaults to `~/.smartfiles` when unset).
 - Structure: mirrors the folder passed to the CLI, with files saved as
 	UTF-8 `.txt` (filenames keep their original extension and add
 	`.txt`, e.g. `file.pdf` → `file.pdf.txt`).
+
+A parallel `stats/` directory
+(`/<DATA_DIR>/<folder_name>_rawText/stats/`) contains per-run text
+extraction summaries, including timestamp, git commit, and one entry
+per file processed.
 
 This makes it easy to open a `.txt` file and validate that text
 extraction (PDF parsing or OCR) is working as expected.

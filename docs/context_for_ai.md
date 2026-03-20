@@ -301,16 +301,18 @@ By default, SmartFiles stores its data under:
 ~/.smartfiles/
 
 This base directory can be overridden with the environment variable
-`SMARTFILES_DATA_DIR`. Within that directory, the vector database and
-corpus are stored as:
+`SMARTFILES_DATA_DIR`. Within that directory, each indexed root folder
+gets its own raw-text tree:
 
-- Vector DB: `<DATA_DIR>/database/`
-- Text corpus: `<DATA_DIR>/corpus/`
+- Raw text + stats: `<DATA_DIR>/<folder_name>_rawText/`
+	- Corpus: `corpus/` (per-document `.txt` files)
+	- Stats: `stats/` (per-run extraction summaries)
+- Vector DB (currently shared across folders): `<DATA_DIR>/database/`
 
 In parallel with the vector database, SmartFiles maintains a plain
 text corpus for validation and debugging:
 
-- Location: `<DATA_DIR>/corpus/`
+- Location (per root folder): `<DATA_DIR>/<folder_name>_rawText/corpus/`
 - Contents: one UTF-8 `.txt` file per indexed document containing the
 	full raw extracted text (after parsing/OCR, before chunking).
 

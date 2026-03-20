@@ -9,6 +9,7 @@ from smartfiles.database.text_store import (
     reset_text_corpus,
     save_document_text,
     iter_corpus_documents,
+    get_next_stats_file_path,
 )
 from smartfiles.ingestion.file_scanner import iter_files
 from smartfiles.ingestion.text_extractor import get_default_extractor
@@ -23,7 +24,7 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     """
 
     if recreate_text:
-        reset_text_corpus()
+        reset_text_corpus(root_folder)
 
     extractor = get_default_extractor()
     paths = list(iter_files(root_folder))
@@ -33,18 +34,63 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
 
     print(f"Extracting text from {len(paths)} files under {root_folder}...")
 
+    # Prepare a new stats file for this extraction run.
+    from datetime import datetime
+    import os
+    import subprocess
+
+    stats_path = get_next_stats_file_path(root_folder)
+
+    # Try to capture the current git commit hash (best-effort).
+    commit = "unknown"
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+        )
+        if result.stdout.strip():
+            commit = result.stdout.strip()
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+    timestamp = datetime.now().isoformat()
+    data_dir = os.getenv("SMARTFILES_DATA_DIR", "~/.smartfiles (default)")
+
+    header_lines = [
+        "SmartFiles text extraction run",
+        f"Timestamp: {timestamp}",
+        f"Git commit: {commit}",
+        f"Root folder: {root_folder}",
+        f"SMARTFILES_DATA_DIR: {data_dir}",
+        "---",
+        "",
+    ]
+    stats_path.write_text("\n".join(header_lines), encoding="utf-8")
+
     for path in paths:
         try:
             text = extractor.extract_text(path)
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[WARN] Failed to extract text from {path}: {exc}")
+            with stats_path.open("a", encoding="utf-8") as f:
+                f.write(f"[ERROR] {path}\n")
+                f.write(f"  error={exc}\n\n")
             continue
 
         if not text.strip():
             print(f"[WARN] No text extracted from {path}, skipping.")
+            with stats_path.open("a", encoding="utf-8") as f:
+                f.write(f"[WARN] {path}\n")
+                f.write("  message=No text extracted; skipped\n\n")
             continue
 
         save_document_text(root_folder=root_folder, path=path, text=text)
+        with stats_path.open("a", encoding="utf-8") as f:
+            f.write(f"[OK] {path}\n")
+            f.write(f"  extracted_chars={len(text)}\n\n")
 
     print("Extraction complete.")
 
