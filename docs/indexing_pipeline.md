@@ -11,17 +11,20 @@ Initial supported types (implemented):
 - PDF
 - PNG
 - JPG
-
-Planned (not yet implemented):
 - DOCX
 
 ### 2. Text Extraction
-PDF parsing using pypdf.
+PDF:
+- Text layer parsing using pypdf.
+- If the text layer is empty, pages are rendered to images and passed through OCR (standard, then stronger fallback when needed).
 
 PNG / JPG:
-- OCR using pytesseract (via Pillow image loading)
+- OCR using pytesseract (via Pillow image loading).
 
-If OCR dependencies are not installed, image files are currently skipped (no text extracted).
+DOCX:
+- Parsed using python-docx to extract paragraph text.
+
+If OCR dependencies are not installed, image/PDF OCR is skipped (no text extracted for those files).
 
 ### 3. Text Cleaning
 Normalize text:

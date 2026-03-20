@@ -2,7 +2,7 @@ import pathlib
 from collections.abc import Iterable
 from typing import Iterator
 
-SUPPORTED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
+SUPPORTED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".docx"}
 
 
 def iter_files(root: pathlib.Path) -> Iterator[pathlib.Path]:

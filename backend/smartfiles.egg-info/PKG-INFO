@@ -12,3 +12,4 @@ Requires-Dist: pillow
 Requires-Dist: pytesseract
 Requires-Dist: pdf2image
 Requires-Dist: numpy<2
+Requires-Dist: python-docx

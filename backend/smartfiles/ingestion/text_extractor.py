@@ -22,6 +22,11 @@ except Exception:  # pragma: no cover - optional
     pytesseract = None  # type: ignore
     convert_from_path = None  # type: ignore
 
+try:  # Optional dependency for DOCX parsing
+    import docx  # type: ignore
+except Exception:  # pragma: no cover - optional
+    docx = None  # type: ignore
+
 
 class TextExtractor(Protocol):
     def extract_text(self, path: pathlib.Path) -> str:  # pragma: no cover - protocol
@@ -48,6 +53,8 @@ class DefaultTextExtractor:
             return self._extract_pdf(path)
         if suffix in {".png", ".jpg", ".jpeg"}:
             return self._extract_image(path)
+        if suffix == ".docx":
+            return self._extract_docx(path)
         raise ValueError(f"Unsupported file type: {suffix}")
 
     def _extract_pdf(self, path: pathlib.Path) -> str:
@@ -128,6 +135,30 @@ class DefaultTextExtractor:
             return ""
 
         return text or ""
+
+    def _extract_docx(self, path: pathlib.Path) -> str:
+        """Extract text from a .docx file.
+
+        If python-docx is not installed, we degrade gracefully and
+        return an empty string so the caller can treat this as a
+        no-text-extracted case.
+        """
+
+        if docx is None:
+            return ""
+
+        try:
+            document = docx.Document(str(path))  # type: ignore[arg-type]
+        except Exception:
+            return ""
+
+        parts: list[str] = []
+        for para in document.paragraphs:
+            text = para.text.strip()
+            if text:
+                parts.append(text)
+
+        return "\n".join(parts)
 
 
 def get_default_extractor() -> DefaultTextExtractor:

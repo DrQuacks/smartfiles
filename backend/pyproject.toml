@@ -12,7 +12,8 @@ dependencies = [
     "pillow",
     "pytesseract",
     "pdf2image",
-    "numpy<2"
+    "numpy<2",
+    "python-docx"
 ]
 
 [project.scripts]
