@@ -5,6 +5,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import List, Optional
 
+from smartfiles.config import get_data_dir
+
 
 REGISTRY_FILENAME = "smartfiles_folders.json"
 
@@ -19,6 +21,26 @@ class FolderEntry:
 
 
 def _get_registry_path() -> Path:
+    """Return the path to the registry file inside the data directory.
+
+    The data directory itself is determined by SMARTFILES_DATA_DIR (or
+    defaults to ~/.smartfiles); we keep the registry alongside the
+    database and *_rawText folders.
+    """
+
+    data_dir = get_data_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir / REGISTRY_FILENAME
+
+
+def _get_old_registry_path() -> Path:
+    """Previous location of the registry (repo root).
+
+    This is kept for backward compatibility so existing installations
+    with a registry at the old location continue to work. Once entries
+    are saved again, they will be written to the new data-dir location.
+    """
+
     # Repo root is two levels up from this file: backend/smartfiles/..
     return Path(__file__).resolve().parents[2] / REGISTRY_FILENAME
 
@@ -26,7 +48,11 @@ def _get_registry_path() -> Path:
 def _load_registry() -> List[FolderEntry]:
     path = _get_registry_path()
     if not path.exists():
-        return []
+        # Fallback to the old location if present.
+        old_path = _get_old_registry_path()
+        if not old_path.exists():
+            return []
+        path = old_path
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, list):
         return []

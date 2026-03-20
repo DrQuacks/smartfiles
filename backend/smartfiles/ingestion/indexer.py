@@ -17,7 +17,7 @@ from smartfiles.ingestion.text_extractor import get_default_extractor
 from smartfiles.ingestion.chunker import chunk_document
 
 
-def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False) -> None:
+def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False, pdf_ocr: bool = False) -> None:
     """Parse supported documents and write raw text files to the corpus.
 
     This stage is useful on its own to debug PDF parsing and OCR
@@ -32,7 +32,7 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     if recreate_text:
         reset_text_corpus(root_folder)
 
-    extractor = get_default_extractor()
+    extractor = get_default_extractor(pdf_ocr_fallback=pdf_ocr)
     paths = list(iter_files(root_folder))
     if not paths:
         print(f"No supported files found under {root_folder}.")
@@ -72,39 +72,77 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
         f"Git commit: {commit}",
         f"Root folder: {root_folder}",
         f"SMARTFILES_DATA_DIR: {data_dir}",
-        "---",
         "",
     ]
-    stats_path.write_text("\n".join(header_lines), encoding="utf-8")
+
+    # Per-file stats and counters for summary.
+    per_file_lines: list[str] = []
+    ok_count = 0
+    warn_count = 0
+    skip_count = 0
 
     for path in paths:
+        # Skip zero-byte files before attempting extraction.
+        try:
+            size_bytes = path.stat().st_size
+        except OSError as exc:  # pragma: no cover - defensive
+            print(f"[WARN] Could not stat {path}: {exc}")
+            per_file_lines.append(f"[WARN] {path}\n")
+            per_file_lines.append(f"  message=Could not stat file; skipped\n\n")
+            warn_count += 1
+            continue
+
+        if size_bytes == 0:
+            print(f"[SKIP] {path} (0kb)")
+            per_file_lines.append(f"[SKIP] {path}\n")
+            per_file_lines.append("  message=0kb\n\n")
+            skip_count += 1
+            continue
         try:
             text = extractor.extract_text(path)
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[WARN] Failed to extract text from {path}: {exc}")
-            with stats_path.open("a", encoding="utf-8") as f:
-                f.write(f"[ERROR] {path}\n")
-                f.write(f"  error={exc}\n\n")
+            per_file_lines.append(f"[ERROR] {path}\n")
+            per_file_lines.append(f"  error={exc}\n\n")
             continue
 
         if not text.strip():
             print(f"[WARN] No text extracted from {path}, skipping.")
-            with stats_path.open("a", encoding="utf-8") as f:
-                f.write(f"[WARN] {path}\n")
-                f.write("  message=No text extracted; skipped\n\n")
+            per_file_lines.append(f"[WARN] {path}\n")
+            per_file_lines.append("  message=No text extracted; skipped\n\n")
+            warn_count += 1
             continue
 
         save_document_text(root_folder=root_folder, path=path, text=text)
-        with stats_path.open("a", encoding="utf-8") as f:
-            f.write(f"[OK] {path}\n")
-            f.write(f"  extracted_chars={len(text)}\n\n")
+        per_file_lines.append(f"[OK] {path}\n")
+        per_file_lines.append(f"  extracted_chars={len(text)}\n\n")
+        ok_count += 1
 
     # Record total duration and update registry metadata.
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
-    with stats_path.open("a", encoding="utf-8") as f:
-        f.write("---\n")
-        f.write(f"Total duration_seconds={duration:.3f}\n")
+
+    # Build summary and write stats file in one pass so that
+    # summary counts appear near the top of the file.
+    summary_lines = [
+        "Summary:",
+        f"  total_files={len(paths)}",
+        f"  ok={ok_count}",
+        f"  warn={warn_count}",
+        f"  skip={skip_count}",
+        "",
+        "---",
+        "",
+    ]
+
+    footer_lines = [
+        "---",
+        f"Total duration_seconds={duration:.3f}",
+        "",
+    ]
+
+    all_lines = header_lines + summary_lines + per_file_lines + footer_lines
+    stats_path.write_text("\n".join(all_lines), encoding="utf-8")
 
     update_folder_metadata(root_folder, last_indexed=end_time.isoformat(), last_commit=commit)
 
@@ -144,10 +182,10 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
         print("Index build complete.")
 
 
-def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False) -> None:
+def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False, pdf_ocr: bool = False) -> None:
     """Run extraction and index build as a single end-to-end pipeline."""
 
     # For a full run we recreate both the text corpus and the index
     # when requested.
-    extract_documents(root_folder=root_folder, recreate_text=recreate)
+    extract_documents(root_folder=root_folder, recreate_text=recreate, pdf_ocr=pdf_ocr)
     build_index_from_corpus(root_folder=root_folder, recreate_index=recreate)

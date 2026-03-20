@@ -20,9 +20,14 @@ def extract(
         "--recreate-text",
         help="Delete and rebuild the raw text corpus before extracting.",
     ),
+    pdf_ocr: bool = typer.Option(
+        False,
+        "--pdf-ocr",
+        help="For PDFs with no text layer, fall back to OCR (slower).",
+    ),
 ):
     """Only parse documents and write raw text files to the corpus."""
-    extract_documents(root_folder=folder, recreate_text=recreate_text)
+    extract_documents(root_folder=folder, recreate_text=recreate_text, pdf_ocr=pdf_ocr)
 
 
 @app.command()
@@ -38,9 +43,14 @@ def index_from_text(
 def index(
     folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder to index"),
     recreate: bool = typer.Option(False, "--recreate", help="Recreate both corpus and index from scratch"),
+    pdf_ocr: bool = typer.Option(
+        False,
+        "--pdf-ocr",
+        help="For PDFs with no text layer, fall back to OCR during extraction.",
+    ),
 ):
     """Run the full pipeline: extract text, chunk, embed, and index."""
-    run_indexing_pipeline(root_folder=folder, recreate=recreate)
+    run_indexing_pipeline(root_folder=folder, recreate=recreate, pdf_ocr=pdf_ocr)
 
 
 @app.command()
