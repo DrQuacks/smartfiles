@@ -71,6 +71,16 @@ A parallel `stats/` directory
 extraction summaries, including timestamp, git commit, and one entry
 per file processed.
 
+Optionally, per-chunk text files can also be written for inspection:
+
+- Chunks path: `<DATA_DIR>/<folder_name>_rawText/chunks/`
+- Structure: mirrors the folder you indexed; each document like
+	`some/file.pdf` produces files such as
+	`some/file.pdf.chunk-0.txt`, `some/file.pdf.chunk-1.txt`, etc.
+- Control: enabled by default when running `smartfiles index` or
+	`smartfiles index-from-text`, and can be disabled with
+	`--no-save-chunks` if you don't want chunk files on disk.
+
 This makes it easy to open a `.txt` file and validate that text
 extraction (PDF parsing or OCR) is working as expected.
 

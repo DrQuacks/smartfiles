@@ -29,18 +29,28 @@ def extract(
 def index_from_text(
     folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder whose extracted text should be indexed"),
     recreate: bool = typer.Option(False, "--recreate", help="Recreate the vector index before indexing."),
+    save_chunks: bool = typer.Option(
+        True,
+        "--save-chunks/--no-save-chunks",
+        help="Write per-chunk text files under the 'chunks' folder for inspection.",
+    ),
 ):
     """Chunk, embed, and index using the existing raw text corpus."""
-    build_index_from_corpus(root_folder=folder, recreate_index=recreate)
+    build_index_from_corpus(root_folder=folder, recreate_index=recreate, save_chunks=save_chunks)
 
 
 @app.command()
 def index(
     folder: pathlib.Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True, readable=True, resolve_path=True, help="Folder to index"),
     recreate: bool = typer.Option(False, "--recreate", help="Recreate both corpus and index from scratch"),
+    save_chunks: bool = typer.Option(
+        True,
+        "--save-chunks/--no-save-chunks",
+        help="Write per-chunk text files under the 'chunks' folder for inspection.",
+    ),
 ):
     """Run the full pipeline: extract text, chunk, embed, and index."""
-    run_indexing_pipeline(root_folder=folder, recreate=recreate)
+    run_indexing_pipeline(root_folder=folder, recreate=recreate, save_chunks=save_chunks)
 
 
 @app.command()

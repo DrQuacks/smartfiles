@@ -10,6 +10,7 @@ from smartfiles.database.text_store import (
     save_document_text,
     iter_corpus_documents,
     get_next_stats_file_path,
+    save_chunk_text,
 )
 from smartfiles.folder_registry import ensure_folder_entry, update_folder_metadata
 from smartfiles.ingestion.file_scanner import iter_files
@@ -149,7 +150,7 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     print("Extraction complete.")
 
 
-def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool = False) -> None:
+def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool = False, save_chunks: bool = True) -> None:
     """Chunk, embed, and index documents using the saved text corpus.
 
     Assumes `extract_documents` has already been run for the given
@@ -170,6 +171,10 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
         if not chunks:
             continue
 
+        if save_chunks:
+            for chunk in chunks:
+                save_chunk_text(root_folder=root_folder, path=original_path, chunk_index=chunk.chunk_index, text=chunk.text)
+
         embeddings = embedder.embed_texts([c.text for c in chunks])
         vector_store.add_documents(chunks=chunks, embeddings=embeddings)
 
@@ -182,10 +187,10 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
         print("Index build complete.")
 
 
-def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False) -> None:
+def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False, save_chunks: bool = True) -> None:
     """Run extraction and index build as a single end-to-end pipeline."""
 
     # For a full run we recreate both the text corpus and the index
     # when requested.
     extract_documents(root_folder=root_folder, recreate_text=recreate)
-    build_index_from_corpus(root_folder=root_folder, recreate_index=recreate)
+    build_index_from_corpus(root_folder=root_folder, recreate_index=recreate, save_chunks=save_chunks)

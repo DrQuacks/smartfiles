@@ -31,6 +31,18 @@ def get_stats_dir(root_folder: Path) -> Path:
     return _get_run_base_dir(root_folder) / "stats"
 
 
+def get_chunks_dir(root_folder: Path) -> Path:
+    """Return the directory where per-chunk text files are stored.
+
+    Layout under the SmartFiles data dir (`SMARTFILES_DATA_DIR` or
+    `~/.smartfiles` by default):
+
+    `<DATA_DIR>/<folder_name>_rawText/{corpus,stats,chunks}/...`
+    """
+
+    return _get_run_base_dir(root_folder) / "chunks"
+
+
 def reset_text_corpus(root_folder: Path) -> None:
     """Delete and recreate the text corpus directory for a root folder.
 
@@ -51,6 +63,12 @@ def ensure_text_corpus_dir(root_folder: Path) -> None:
 
     get_corpus_dir(root_folder).mkdir(parents=True, exist_ok=True)
     get_stats_dir(root_folder).mkdir(parents=True, exist_ok=True)
+
+
+def ensure_chunks_dir(root_folder: Path) -> None:
+    """Ensure the chunks directory exists alongside corpus/stats."""
+
+    get_chunks_dir(root_folder).mkdir(parents=True, exist_ok=True)
 
 
 def save_document_text(root_folder: Path, path: Path, text: str) -> Path:
@@ -79,6 +97,36 @@ def save_document_text(root_folder: Path, path: Path, text: str) -> Path:
     # original relative path (including its extension).
     rel_txt = Path(str(rel) + ".txt")
     out_path = get_corpus_dir(root_folder) / rel_txt
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(text, encoding="utf-8")
+    return out_path
+
+
+def save_chunk_text(root_folder: Path, path: Path, chunk_index: int, text: str) -> Path:
+    """Persist a single chunk's text as a UTF-8 .txt file.
+
+    The directory structure under the per-root `chunks/` directory
+    mirrors the path relative to `root_folder` when possible, with an
+    additional `.chunk-{index}.txt` suffix appended. For example:
+
+    `some/file.pdf` chunk 0 -> `chunks/some/file.pdf.chunk-0.txt`.
+
+    This is intended primarily for inspection/debugging and may
+    generate many small files for large corpora.
+    """
+
+    ensure_chunks_dir(root_folder)
+
+    root_folder = root_folder.expanduser().resolve()
+    path = path.expanduser().resolve()
+
+    try:
+        rel = path.relative_to(root_folder)
+    except ValueError:
+        rel = Path(path.name)
+
+    rel_txt = Path(f"{rel}.chunk-{chunk_index}.txt")
+    out_path = get_chunks_dir(root_folder) / rel_txt
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(text, encoding="utf-8")
     return out_path

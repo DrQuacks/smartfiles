@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from smartfiles.ingestion.indexer import extract_documents, build_index_from_corpus
-from smartfiles.database.text_store import get_corpus_dir, get_stats_dir, save_document_text
+from smartfiles.database.text_store import get_corpus_dir, get_stats_dir, get_chunks_dir, save_document_text
 from smartfiles.folder_registry import ensure_folder_entry
 
 
@@ -120,7 +120,7 @@ def test_build_index_from_corpus_uses_saved_text(tmp_path, monkeypatch):
     monkeypatch.setattr(indexer_mod, "get_default_embedding_model", fake_get_default_embedding_model)
     monkeypatch.setattr(indexer_mod, "get_default_vector_store", fake_get_default_vector_store)
 
-    # Run index build from the prepared corpus.
+    # Run index build from the prepared corpus (saving chunks by default).
     build_index_from_corpus(root_folder=run_root, recreate_index=True)
 
     # We should have exactly one add_documents call with at least one chunk
@@ -131,3 +131,8 @@ def test_build_index_from_corpus_uses_saved_text(tmp_path, monkeypatch):
     assert chunks
     combined_text = "\n".join(c.text for c in chunks)
     assert "Gravity is a force" in combined_text
+
+    # Chunks directory should contain at least one chunk file for this document.
+    chunks_dir = get_chunks_dir(run_root)
+    chunk_files = list(chunks_dir.rglob("*.txt"))
+    assert chunk_files
