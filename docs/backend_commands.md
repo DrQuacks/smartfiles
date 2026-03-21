@@ -92,6 +92,35 @@ uvicorn smartfiles.server.api:app --reload
 
 (See `docs/context_for_ai.md` and `docs/search_system.md` for server design details.)
 
+## Embedding Model & Offline Use
+
+By default, SmartFiles uses the sentence-transformers model
+`BAAI/bge-small-en-v1` from the Hugging Face Hub for embeddings. On
+first use, this model will be downloaded and cached locally.
+
+You can override the model name or point SmartFiles at a fully local
+copy by setting the `SMARTFILES_EMBEDDING_MODEL` environment
+variable before running the CLI. For example:
+
+```bash
+export SMARTFILES_EMBEDDING_MODEL=BAAI/bge-small-en-v1   # default
+# or, after cloning/downloading a model locally:
+export SMARTFILES_EMBEDDING_MODEL=/path/to/local/bge-small-en-v1
+```
+
+An offline-friendly workflow looks like this:
+
+1. On a machine with internet, download the model once (for example
+	by running SmartFiles normally or by cloning the model repo).
+2. Copy the model directory to a stable location on your machine.
+3. Set `SMARTFILES_EMBEDDING_MODEL` to that local path.
+4. Optionally set Hugging Face to offline mode (e.g. via
+	`HF_HUB_OFFLINE=1`) so no further network calls are attempted.
+
+SmartFiles itself never stores or manages any Hugging Face tokens;
+authentication, if needed, is handled entirely by your environment
+(`huggingface-cli login` or relevant `HF_*` environment variables).
+
 ## Troubleshooting
 
 - **NumPy ABI error (1.x vs 2.x):** if you see an error about a module
