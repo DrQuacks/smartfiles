@@ -86,6 +86,26 @@ class DefaultTextExtractor:
         # If no text layer is present, fall back to OCR.
         return self._pdf_ocr_fallback_for_pdf(path) or joined
 
+    def _pdf_ocr_fallback_for_pdf(self, path: pathlib.Path) -> str:
+        """Run the tiered OCR fallback for a PDF.
+
+        This first performs a standard OCR pass and, if that fails to
+        yield usable text, escalates to a stronger math-aware OCR pass
+        with higher DPI and simple preprocessing.
+        """
+
+        # Tier 1: standard OCR on rendered pages.
+        basic = _ocr_pages_for_pdf(path, dpi=200, strong=False)
+        if basic.strip():
+            return basic
+
+        # Tier 2: strong OCR with preprocessing and math-aware config.
+        strong_text = _ocr_pages_for_pdf(path, dpi=300, strong=True)
+        if strong_text.strip():
+            return strong_text
+
+        return ""
+
     def _extract_image(self, path: pathlib.Path) -> str:
         if Image is None or pytesseract is None:
             # Graceful degradation if OCR stack is not installed
