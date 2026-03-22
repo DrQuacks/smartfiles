@@ -11,6 +11,7 @@ from smartfiles.database.text_store import (
     iter_corpus_documents,
     get_next_stats_file_path,
     save_chunk_text,
+    get_corpus_dir,
 )
 from smartfiles.folder_registry import ensure_folder_entry, update_folder_metadata
 from smartfiles.ingestion.file_scanner import iter_files
@@ -82,6 +83,10 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     warn_count = 0
     skip_count = 0
 
+    # Precompute the corpus directory so we can detect already-extracted
+    # files and avoid rerunning heavy PDF/OCR work when not recreating.
+    corpus_dir = get_corpus_dir(root_folder)
+
     for path in paths:
         # Skip zero-byte files before attempting extraction.
         try:
@@ -91,6 +96,25 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
             per_file_lines.append(f"[WARN] {path}\n")
             per_file_lines.append(f"  message=Could not stat file; skipped\n\n")
             warn_count += 1
+            continue
+
+        # If we're not recreating the corpus and a text file already
+        # exists for this document, skip extraction and rely on the
+        # existing corpus for downstream chunking/indexing.
+        rel_target = None
+        try:
+            rel = path.expanduser().resolve().relative_to(root_folder)
+            rel_target = corpus_dir / (str(rel) + ".txt")
+        except ValueError:
+            # If outside the root, we store at the top level using
+            # just the filename.
+            rel_target = corpus_dir / f"{path.name}.txt"
+
+        if not recreate_text and rel_target is not None and rel_target.exists():
+            print(f"[SKIP] {path} (already extracted; using existing corpus text)")
+            per_file_lines.append(f"[SKIP] {path}\n")
+            per_file_lines.append("  message=Already extracted; using existing corpus text\n\n")
+            skip_count += 1
             continue
 
         if size_bytes == 0:

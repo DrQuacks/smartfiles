@@ -30,15 +30,24 @@ def test_extract_documents_writes_corpus_and_stats(tmp_path, monkeypatch):
     from smartfiles import ingestion as ingestion_pkg
 
     class FakeExtractor:
+        def __init__(self):
+            self.calls = []
+
         def extract_text(self, path: Path) -> str:  # pragma: no cover - trivial stub
+            self.calls.append(path)
             return f"TEXT FROM {path.name}"
 
+    # Reuse a single extractor instance so we can verify that running
+    # extraction again without recreate_text=True does not rerun
+    # expensive per-file extraction work when corpus files already exist.
+    extractor_instance = FakeExtractor()
+
     def fake_get_default_extractor():  # pragma: no cover - trivial stub
-        return FakeExtractor()
+        return extractor_instance
 
     monkeypatch.setattr(ingestion_pkg.indexer, "get_default_extractor", fake_get_default_extractor)
 
-    # Run extraction.
+    # Run extraction the first time, recreating the corpus.
     extract_documents(root_folder=root, recreate_text=True)
 
     # Resolve the per-root corpus/stats directories via the helpers.
@@ -63,6 +72,14 @@ def test_extract_documents_writes_corpus_and_stats(tmp_path, monkeypatch):
     stats_text = stats_files[0].read_text(encoding="utf-8")
     assert "Summary:" in stats_text
     assert "[OK]" in stats_text
+
+    # Run extraction a second time without recreating text; this should
+    # reuse existing corpus files instead of rerunning extraction.
+    extract_documents(root_folder=root, recreate_text=False)
+
+    # We have two input files, so the extractor should have been called
+    # exactly twice across both runs (once per file), not four times.
+    assert len(extractor_instance.calls) == 2
 
 
 def test_build_index_from_corpus_uses_saved_text(tmp_path, monkeypatch):
