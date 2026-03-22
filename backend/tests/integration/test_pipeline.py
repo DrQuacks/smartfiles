@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from smartfiles.ingestion.indexer import extract_documents, build_index_from_corpus
+from smartfiles.ingestion.indexer import extract_documents, build_index_from_corpus, chunk_corpus_from_text
 from smartfiles.database.text_store import get_corpus_dir, get_stats_dir, get_chunks_dir, save_document_text
 from smartfiles.folder_registry import ensure_folder_entry
 
@@ -153,3 +153,41 @@ def test_build_index_from_corpus_uses_saved_text(tmp_path, monkeypatch):
     chunks_dir = get_chunks_dir(run_root)
     chunk_files = list(chunks_dir.rglob("*.txt"))
     assert chunk_files
+
+
+def test_chunk_corpus_from_text_writes_chunks_without_embedding(tmp_path, monkeypatch):
+    """`chunk_corpus_from_text` should read from the corpus and write
+    chunk files without requiring embeddings or the vector store.
+
+    This lets us inspect chunking independently of the embedding/index
+    stages.
+    """
+
+    # Use a temp data dir for this test run.
+    data_dir = tmp_path / "data"
+    monkeypatch.setenv("SMARTFILES_DATA_DIR", str(data_dir))
+
+    # Prepare a root folder and populate the corpus via text_store.
+    root = tmp_path / "root"
+    root.mkdir()
+    entry = ensure_folder_entry(root)
+    run_root = Path(entry.path)
+
+    original_path = root / "doc.txt"
+    original_path.write_text("one two three four five six", encoding="utf-8")
+
+    # Save some text for this file in the corpus.
+    sample_text = "Gravity is a force between masses. It acts at a distance."
+    save_document_text(run_root, original_path, sample_text)
+
+    # Run chunking from the prepared corpus.
+    chunk_corpus_from_text(root_folder=run_root, save_chunks=True)
+
+    # Chunks directory should contain at least one chunk file for this document.
+    chunks_dir = get_chunks_dir(run_root)
+    chunk_files = list(chunks_dir.rglob("*.txt"))
+    assert chunk_files
+
+    # Each chunk file should contain a portion of the sample text.
+    combined = "\n".join(p.read_text(encoding="utf-8") for p in chunk_files)
+    assert "Gravity is a force" in combined

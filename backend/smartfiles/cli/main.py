@@ -6,6 +6,7 @@ from smartfiles.ingestion.indexer import (
     run_indexing_pipeline,
     extract_documents,
     build_index_from_corpus,
+    chunk_corpus_from_text,
 )
 from smartfiles.search.search_engine import run_search
 
@@ -34,9 +35,51 @@ def index_from_text(
         "--save-chunks/--no-save-chunks",
         help="Write per-chunk text files under the 'chunks' folder for inspection.",
     ),
+    chunk_size: int = typer.Option(
+        500,
+        "--chunk-size",
+        min=1,
+        help="Approximate number of words per chunk.",
+    ),
+    overlap: int = typer.Option(
+        50,
+        "--chunk-overlap",
+        min=0,
+        help="Approximate number of overlapping words between chunks.",
+    ),
 ):
     """Chunk, embed, and index using the existing raw text corpus."""
-    build_index_from_corpus(root_folder=folder, recreate_index=recreate, save_chunks=save_chunks)
+    build_index_from_corpus(
+        root_folder=folder,
+        recreate_index=recreate,
+        save_chunks=save_chunks,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
+
+
+@app.command()
+def chunk_from_text(
+    folder: pathlib.Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+        help="Folder whose extracted text should be chunked",
+    ),
+    save_chunks: bool = typer.Option(
+        True,
+        "--save-chunks/--no-save-chunks",
+        help="Write per-chunk text files under the 'chunks' folder for inspection.",
+    ),
+):
+    """Chunk documents using the existing raw text corpus, without embedding."""
+    chunk_corpus_from_text(
+        root_folder=folder,
+        save_chunks=save_chunks,
+    )
 
 
 @app.command()
@@ -48,9 +91,27 @@ def index(
         "--save-chunks/--no-save-chunks",
         help="Write per-chunk text files under the 'chunks' folder for inspection.",
     ),
+    chunk_size: int = typer.Option(
+        500,
+        "--chunk-size",
+        min=1,
+        help="Approximate number of words per chunk.",
+    ),
+    overlap: int = typer.Option(
+        50,
+        "--chunk-overlap",
+        min=0,
+        help="Approximate number of overlapping words between chunks.",
+    ),
 ):
     """Run the full pipeline: extract text, chunk, embed, and index."""
-    run_indexing_pipeline(root_folder=folder, recreate=recreate, save_chunks=save_chunks)
+    run_indexing_pipeline(
+        root_folder=folder,
+        recreate=recreate,
+        save_chunks=save_chunks,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
 
 
 @app.command()

@@ -174,7 +174,14 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
     print("Extraction complete.")
 
 
-def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool = False, save_chunks: bool = True) -> None:
+def build_index_from_corpus(
+    *,
+    root_folder: pathlib.Path,
+    recreate_index: bool = False,
+    save_chunks: bool = True,
+    chunk_size: int = 500,
+    overlap: int = 50,
+) -> None:
     """Chunk, embed, and index documents using the saved text corpus.
 
     Assumes `extract_documents` has already been run for the given
@@ -191,7 +198,12 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
             print(f"[WARN] Empty text in corpus for {original_path}, skipping.")
             continue
 
-        chunks = chunk_document(filepath=str(original_path), text=text)
+        chunks = chunk_document(
+            filepath=str(original_path),
+            text=text,
+            chunk_size=chunk_size,
+            overlap=overlap,
+        )
         if not chunks:
             continue
 
@@ -211,10 +223,70 @@ def build_index_from_corpus(*, root_folder: pathlib.Path, recreate_index: bool =
         print("Index build complete.")
 
 
-def run_indexing_pipeline(*, root_folder: pathlib.Path, recreate: bool = False, save_chunks: bool = True) -> None:
+def chunk_corpus_from_text(
+    *,
+    root_folder: pathlib.Path,
+    save_chunks: bool = True,
+    chunk_size: int = 500,
+    overlap: int = 50,
+) -> None:
+    """Chunk documents using the saved text corpus, without embedding.
+
+    This stage is useful for inspecting how documents are broken up
+    into chunks before any embeddings or indexing are performed.
+    """
+
+    any_docs = False
+    for original_path, text in iter_corpus_documents(root_folder):
+        any_docs = True
+        if not text.strip():
+            print(f"[WARN] Empty text in corpus for {original_path}, skipping.")
+            continue
+
+        chunks = chunk_document(
+            filepath=str(original_path),
+            text=text,
+            chunk_size=chunk_size,
+            overlap=overlap,
+        )
+        if not chunks:
+            continue
+
+        if save_chunks:
+            for chunk in chunks:
+                save_chunk_text(
+                    root_folder=root_folder,
+                    path=original_path,
+                    chunk_index=chunk.chunk_index,
+                    text=chunk.text,
+                )
+
+    if not any_docs:
+        print(
+            "No documents found in the text corpus. "
+            "Run 'smartfiles extract' first or use 'smartfiles index' for the full pipeline."
+        )
+    else:
+        print("Chunking complete.")
+
+
+def run_indexing_pipeline(
+    *,
+    root_folder: pathlib.Path,
+    recreate: bool = False,
+    save_chunks: bool = True,
+    chunk_size: int = 500,
+    overlap: int = 50,
+) -> None:
     """Run extraction and index build as a single end-to-end pipeline."""
 
     # For a full run we recreate both the text corpus and the index
     # when requested.
     extract_documents(root_folder=root_folder, recreate_text=recreate)
-    build_index_from_corpus(root_folder=root_folder, recreate_index=recreate, save_chunks=save_chunks)
+    build_index_from_corpus(
+        root_folder=root_folder,
+        recreate_index=recreate,
+        save_chunks=save_chunks,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
