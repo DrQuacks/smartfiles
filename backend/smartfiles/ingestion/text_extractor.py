@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import string
 from typing import Protocol
 
 import pypdf
@@ -67,54 +68,23 @@ class DefaultTextExtractor:
         joined = "\n".join(texts)
 
         if joined.strip():
+            # If the text layer exists but looks obviously garbled,
+            # we can optionally try an OCR-based path as a fallback.
+            if self._pdf_ocr_fallback and not _ocr_stack_available():
+                return joined
+            if self._pdf_ocr_fallback and _is_probably_garbled(joined):
+                ocr_text = self._pdf_ocr_fallback_for_pdf(path)
+                # Only replace the text-layer output if OCR produced
+                # something non-empty that looks at least as sane.
+                if ocr_text.strip() and not _is_probably_garbled(ocr_text):
+                    return ocr_text
             return joined
 
         # If requested, fall back to OCR for PDFs with no text layer.
-        if not self._pdf_ocr_fallback or Image is None or pytesseract is None or convert_from_path is None:
+        if not self._pdf_ocr_fallback or not _ocr_stack_available():
             return joined
-
-        # Tier 1: standard OCR on rendered pages.
-        def _ocr_pages(dpi: int, strong: bool) -> str:
-            try:
-                images = convert_from_path(str(path), dpi=dpi)  # type: ignore[arg-type]
-            except Exception:
-                return ""
-
-            ocr_texts: list[str] = []
-            for img in images:
-                try:
-                    img = img.convert("RGB")
-                    if strong:
-                        # Lightweight preprocessing for scanned pages.
-                        gray = img.convert("L")
-                        gray = ImageOps.autocontrast(gray)
-                        w, h = gray.size
-                        if max(w, h) < 2000:
-                            scale = 1.5
-                            gray = gray.resize((int(w * scale), int(h * scale)))
-                        ocr_img = gray
-                        config = "--oem 1 --psm 6 --dpi 300"
-                        text = pytesseract.image_to_string(ocr_img, config=config)  # type: ignore[arg-type]
-                    else:
-                        text = pytesseract.image_to_string(img)  # type: ignore[arg-type]
-                except Exception:
-                    text = ""
-                if text:
-                    ocr_texts.append(text)
-
-            return "\n".join(ocr_texts) if ocr_texts else ""
-
-        # First, try a standard OCR pass.
-        basic = _ocr_pages(dpi=200, strong=False)
-        if basic.strip():
-            return basic
-
-        # If that fails to produce any text, escalate to strong OCR.
-        strong_text = _ocr_pages(dpi=300, strong=True)
-        if strong_text.strip():
-            return strong_text
-
-        return joined
+        # If no text layer is present, fall back to OCR.
+        return self._pdf_ocr_fallback_for_pdf(path) or joined
 
     def _extract_image(self, path: pathlib.Path) -> str:
         if Image is None or pytesseract is None:
@@ -126,6 +96,14 @@ class DefaultTextExtractor:
                 # Normalize to a mode that Tesseract handles well.
                 img = img.convert("RGB")
                 text = pytesseract.image_to_string(img)  # type: ignore[arg-type]
+
+                # If the initial OCR result looks obviously garbled,
+                # try a stronger math-aware OCR path with simple
+                # preprocessing before giving up.
+                if text and _is_probably_garbled(text):
+                    strong_text = _ocr_image_strong_math(img)
+                    if strong_text.strip() and not _is_probably_garbled(strong_text):
+                        text = strong_text
         except UnidentifiedImageError:
             # PIL could not make sense of the bytes; let the caller
             # treat this as a no-text-extracted case.
@@ -159,6 +137,111 @@ class DefaultTextExtractor:
                 parts.append(text)
 
         return "\n".join(parts)
+
+
+def _ocr_stack_available() -> bool:
+    return Image is not None and pytesseract is not None and convert_from_path is not None
+
+
+def _ocr_pages_for_pdf(path: pathlib.Path, dpi: int, strong: bool) -> str:
+    if convert_from_path is None or Image is None or pytesseract is None:
+        return ""
+    try:
+        images = convert_from_path(str(path), dpi=dpi)  # type: ignore[arg-type]
+    except Exception:
+        return ""
+
+    ocr_texts: list[str] = []
+    for img in images:
+        try:
+            img = img.convert("RGB")
+            if strong:
+                # Lightweight preprocessing for scanned pages, plus a
+                # math-aware OCR configuration when available.
+                gray = img.convert("L")
+                gray = ImageOps.autocontrast(gray)
+                w, h = gray.size
+                if max(w, h) < 2000:
+                    scale = 1.5
+                    gray = gray.resize((int(w * scale), int(h * scale)))
+                ocr_img = gray
+                config = "--oem 1 --psm 6 --dpi 300"
+                try:
+                    text = pytesseract.image_to_string(  # type: ignore[arg-type]
+                        ocr_img,
+                        lang="eng+equ",
+                        config=config,
+                    )
+                except Exception:
+                    text = pytesseract.image_to_string(ocr_img, config=config)  # type: ignore[arg-type]
+            else:
+                text = pytesseract.image_to_string(img)  # type: ignore[arg-type]
+        except Exception:
+            text = ""
+        if text:
+            ocr_texts.append(text)
+
+    return "\n".join(ocr_texts) if ocr_texts else ""
+
+
+def _ocr_image_strong_math(img: "Image.Image") -> str:  # type: ignore[name-defined]
+    """Run a stronger, math-aware OCR pass on a PIL image.
+
+    This is used as a fallback when the initial OCR text appears
+    obviously garbled.
+    """
+
+    if Image is None or pytesseract is None:
+        return ""
+
+    try:
+        gray = img.convert("L")
+        gray = ImageOps.autocontrast(gray)
+        w, h = gray.size
+        if max(w, h) < 2000:
+            scale = 1.5
+            gray = gray.resize((int(w * scale), int(h * scale)))
+        ocr_img = gray
+        config = "--oem 1 --psm 6"
+        try:
+            text = pytesseract.image_to_string(  # type: ignore[arg-type]
+                ocr_img,
+                lang="eng+equ",
+                config=config,
+            )
+        except Exception:
+            text = pytesseract.image_to_string(ocr_img, config=config)  # type: ignore[arg-type]
+    except Exception:
+        text = ""
+
+    return text or ""
+
+
+def _is_probably_garbled(text: str) -> bool:
+    """Heuristic to detect obviously garbled OCR/text-layer output.
+
+    We keep this intentionally simple and conservative: only clearly
+    junky text should trigger the heavier OCR fallback.
+    """
+
+    # Ignore very short snippets; they are hard to classify.
+    non_ws = [ch for ch in text if not ch.isspace()]
+    if len(non_ws) < 40:
+        return False
+
+    allowed = set(string.ascii_letters + string.digits + " .,;:!?-+*/=%()[]{}<>_^'\"\\|")
+    good = sum(1 for ch in non_ws if ch in allowed)
+    ratio = good / len(non_ws)
+
+    if ratio < 0.6:
+        return True
+
+    # Treat a high density of obvious replacement characters as garbled.
+    bad_markers = text.count("\ufffd")
+    if bad_markers and bad_markers / len(non_ws) > 0.1:
+        return True
+
+    return False
 
 
 def get_default_extractor() -> DefaultTextExtractor:
