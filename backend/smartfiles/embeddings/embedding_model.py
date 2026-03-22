@@ -2,13 +2,40 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List
 
 from sentence_transformers import SentenceTransformer
 
 
-DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1"
+DEFAULT_MODEL_KEY = "bge-small-en-v1"
 MODEL_ENV_VAR = "SMARTFILES_EMBEDDING_MODEL"
+PROFILE_ENV_VAR = "SMARTFILES_EMBEDDING_PROFILE"
+
+
+@dataclass(frozen=True)
+class SupportedEmbeddingModel:
+    key: str
+    model_id: str
+    description: str
+
+
+SUPPORTED_MODELS: Dict[str, SupportedEmbeddingModel] = {
+    "bge-small-en-v1": SupportedEmbeddingModel(
+        key="bge-small-en-v1",
+        model_id="BAAI/bge-small-en-v1",
+        description="General-purpose English model (768d), good trade-off of speed and quality.",
+    ),
+    "bge-base-en-v1": SupportedEmbeddingModel(
+        key="bge-base-en-v1",
+        model_id="BAAI/bge-base-en-v1",
+        description="Larger English model (1024d) for higher-quality embeddings.",
+    ),
+    "all-minilm-l6-v2": SupportedEmbeddingModel(
+        key="all-minilm-l6-v2",
+        model_id="sentence-transformers/all-MiniLM-L6-v2",
+        description="Very small, fast model (384d) suitable for lighter-weight setups.",
+    ),
+}
 
 
 @dataclass
@@ -23,22 +50,54 @@ class EmbeddingModel:
         return [v.tolist() for v in vectors]
 
 
+def _resolve_model_id() -> str:
+    """Resolve which embedding model ID/path to load.
+
+    Precedence (highest to lowest):
+
+    1. `SMARTFILES_EMBEDDING_MODEL` – explicit model id or local path.
+    2. `SMARTFILES_EMBEDDING_PROFILE` – key in SUPPORTED_MODELS.
+    3. Default profile `bge-small-en-v1`.
+    """
+
+    direct = os.getenv(MODEL_ENV_VAR)
+    if direct:
+        return direct
+
+    profile = os.getenv(PROFILE_ENV_VAR, DEFAULT_MODEL_KEY)
+    cfg = SUPPORTED_MODELS.get(profile)
+    if cfg is not None:
+        return cfg.model_id
+
+    # Fallback: treat the profile value as a raw model id/path.
+    return profile
+
+
 def get_default_embedding_model() -> EmbeddingModel:
-        """Return the default embedding model.
+    """Return the default embedding model.
 
-        By default this loads the public Hugging Face model
-        `BAAI/bge-small-en-v1`. You can override this by setting the
-        `SMARTFILES_EMBEDDING_MODEL` environment variable to either:
+    By default this uses the `bge-small-en-v1` profile, which
+    corresponds to the Hugging Face model `BAAI/bge-small-en-v1`.
 
-        - Another model id on the Hugging Face hub, or
-        - A local filesystem path to a compatible SentenceTransformers
-            model directory.
+    You can override this in two ways:
 
-        This makes it easy to work fully offline after the initial
-        download: download the model once, point the env var at the local
-        copy, and SmartFiles will never hit the network for embeddings.
-        """
+    - Set `SMARTFILES_EMBEDDING_PROFILE` to one of the known keys in
+      `SUPPORTED_MODELS` (e.g. `bge-base-en-v1`, `all-minilm-l6-v2`).
+    - Set `SMARTFILES_EMBEDDING_MODEL` to either a Hugging Face model
+      id or a local filesystem path to a SentenceTransformers model
+      directory. This takes precedence over the profile.
 
-        model_name = os.getenv(MODEL_ENV_VAR, DEFAULT_MODEL_NAME)
-        model = SentenceTransformer(model_name)
-        return EmbeddingModel(model=model)
+    This keeps the call site abstract (only `embed_texts` is used) and
+    makes it easy to experiment with different local open-source
+    models by swapping env vars, without changing application code.
+    """
+
+    model_id = _resolve_model_id()
+    model = SentenceTransformer(model_id)
+    return EmbeddingModel(model=model)
+
+
+def list_supported_models() -> List[SupportedEmbeddingModel]:
+    """Return the list of built-in supported embedding model profiles."""
+
+    return list(SUPPORTED_MODELS.values())
