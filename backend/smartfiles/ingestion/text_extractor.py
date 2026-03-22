@@ -61,24 +61,38 @@ class DefaultTextExtractor:
     def _extract_pdf(self, path: pathlib.Path) -> str:
         # First try the fast text-layer extractor.
         reader = pypdf.PdfReader(str(path))
-        texts: list[str] = []
+        page_texts: list[str] = []
         for page in reader.pages:
             text = page.extract_text() or ""
-            texts.append(text)
-        joined = "\n".join(texts)
+            page_texts.append(text)
+        joined = "\n".join(page_texts)
+
+        # For downstream chunking and search, we preserve page
+        # structure in the corpus by inserting lightweight markers
+        # between pages. These markers are later used to derive page
+        # ranges for each chunk.
+        def _with_page_markers(texts: list[str]) -> str:
+            parts: list[str] = []
+            for idx, t in enumerate(texts, start=1):
+                parts.append(f"[[[SMARTFILES_PAGE {idx}]]]")
+                if t:
+                    parts.append(t)
+            return "\n".join(parts)
+
+        joined_with_markers = _with_page_markers(page_texts)
 
         if joined.strip():
             # If the text layer exists but looks obviously garbled,
             # we can optionally try an OCR-based path as a fallback.
             if self._pdf_ocr_fallback and not _ocr_stack_available():
-                return joined
+                return joined_with_markers
             if self._pdf_ocr_fallback and _is_probably_garbled(joined):
                 ocr_text = self._pdf_ocr_fallback_for_pdf(path)
                 # Only replace the text-layer output if OCR produced
                 # something non-empty that looks at least as sane.
                 if ocr_text.strip() and not _is_probably_garbled(ocr_text):
                     return ocr_text
-            return joined
+            return joined_with_markers
 
         # If requested, fall back to OCR for PDFs with no text layer.
         if not self._pdf_ocr_fallback or not _ocr_stack_available():

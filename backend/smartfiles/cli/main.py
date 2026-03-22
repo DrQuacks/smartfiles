@@ -128,10 +128,18 @@ def search(
     for rank, result in enumerate(results, start=1):
         score = result.get("score", 0)
         path = result.get("filepath", "?")
+        page_info = ""
+        page_start = result.get("page_start")
+        page_end = result.get("page_end")
+        if isinstance(page_start, int):
+            if isinstance(page_end, int) and page_end != page_start:
+                page_info = f" (pages {page_start}-{page_end})"
+            else:
+                page_info = f" (page {page_start})"
         snippet = result.get("text", "").replace("\n", " ")
         if len(snippet) > 120:
             snippet = snippet[:117] + "..."
-        typer.echo(f"{rank:2d}. [{score:5.1f}] {path}\n    {snippet}")
+        typer.echo(f"{rank:2d}. [{score:5.1f}] {path}{page_info}\n    {snippet}")
 
 
 if __name__ == "__main__":  # pragma: no cover

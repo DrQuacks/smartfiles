@@ -36,10 +36,14 @@ class ChromaVectorStore:
         texts = [c.text for c in chunks]
         metadatas: List[Dict[str, Any]] = []
         for c in chunks:
-            meta = {
+            meta: Dict[str, Any] = {
                 "filepath": c.filepath,
                 "chunk_index": c.chunk_index,
             }
+            if getattr(c, "page_start", None) is not None:
+                meta["page_start"] = c.page_start
+            if getattr(c, "page_end", None) is not None:
+                meta["page_end"] = c.page_end
             metadatas.append(meta)
 
         self._collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)

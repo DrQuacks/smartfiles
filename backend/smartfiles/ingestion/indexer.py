@@ -209,7 +209,14 @@ def build_index_from_corpus(
 
         if save_chunks:
             for chunk in chunks:
-                save_chunk_text(root_folder=root_folder, path=original_path, chunk_index=chunk.chunk_index, text=chunk.text)
+                save_chunk_text(
+                    root_folder=root_folder,
+                    path=original_path,
+                    chunk_index=chunk.chunk_index,
+                    text=chunk.text,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                )
 
         embeddings = embedder.embed_texts([c.text for c in chunks])
         vector_store.add_documents(chunks=chunks, embeddings=embeddings)
@@ -259,6 +266,8 @@ def chunk_corpus_from_text(
                     path=original_path,
                     chunk_index=chunk.chunk_index,
                     text=chunk.text,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
                 )
 
     if not any_docs:

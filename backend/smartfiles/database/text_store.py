@@ -102,7 +102,14 @@ def save_document_text(root_folder: Path, path: Path, text: str) -> Path:
     return out_path
 
 
-def save_chunk_text(root_folder: Path, path: Path, chunk_index: int, text: str) -> Path:
+def save_chunk_text(
+    root_folder: Path,
+    path: Path,
+    chunk_index: int,
+    text: str,
+    page_start: int | None = None,
+    page_end: int | None = None,
+) -> Path:
     """Persist a single chunk's text as a UTF-8 .txt file.
 
     The directory structure under the per-root `chunks/` directory
@@ -128,7 +135,19 @@ def save_chunk_text(root_folder: Path, path: Path, chunk_index: int, text: str) 
     rel_txt = Path(f"{rel}.chunk-{chunk_index}.txt")
     out_path = get_chunks_dir(root_folder) / rel_txt
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(text, encoding="utf-8")
+
+    # Optionally include simple page metadata at the top of the chunk
+    # file to make it easy to see where this chunk came from within
+    # the original document.
+    lines = []
+    if page_start is not None:
+        if page_end is not None and page_end != page_start:
+            lines.append(f"[PAGES {page_start}-{page_end}]")
+        else:
+            lines.append(f"[PAGE {page_start}]")
+        lines.append("")  # blank line before content
+    lines.append(text)
+    out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
 
 
