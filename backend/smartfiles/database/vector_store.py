@@ -59,7 +59,17 @@ class ChromaVectorStore:
         distances = result.get("distances", [[]])[0]
 
         for _id, doc, meta, dist in zip(ids, docs, metadatas, distances):
-            score = float(100 * (1 - dist)) if dist is not None else 0.0
+            # Chroma returns a distance value where smaller is better.
+            # For cosine distance (the default), values are typically
+            # in [0, 2]. We convert this to a human-friendly similarity
+            # score in [0, 100], where higher is better.
+            if dist is None:
+                score = 0.0
+            else:
+                sim = 1.0 - float(dist)  # similarity ~ 1 - distance
+                # Clamp to a reasonable cosine range [-1, 1].
+                sim = max(-1.0, min(1.0, sim))
+                score = (sim + 1.0) / 2.0 * 100.0
             item: Dict[str, Any] = {
                 "id": _id,
                 "text": doc,
