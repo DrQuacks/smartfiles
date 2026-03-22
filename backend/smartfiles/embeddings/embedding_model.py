@@ -7,7 +7,7 @@ from typing import Dict, List
 from sentence_transformers import SentenceTransformer
 
 
-DEFAULT_MODEL_KEY = "bge-small-en-v1"
+DEFAULT_MODEL_KEY = "all-minilm-l6-v2"
 MODEL_ENV_VAR = "SMARTFILES_EMBEDDING_MODEL"
 PROFILE_ENV_VAR = "SMARTFILES_EMBEDDING_PROFILE"
 
@@ -20,6 +20,11 @@ class SupportedEmbeddingModel:
 
 
 SUPPORTED_MODELS: Dict[str, SupportedEmbeddingModel] = {
+    "all-minilm-l6-v2": SupportedEmbeddingModel(
+        key="all-minilm-l6-v2",
+        model_id="sentence-transformers/all-MiniLM-L6-v2",
+        description="Default; very small, fast 384d model suitable for local/dev.",
+    ),
     "bge-small-en-v1": SupportedEmbeddingModel(
         key="bge-small-en-v1",
         model_id="BAAI/bge-small-en-v1",
@@ -29,11 +34,6 @@ SUPPORTED_MODELS: Dict[str, SupportedEmbeddingModel] = {
         key="bge-base-en-v1",
         model_id="BAAI/bge-base-en-v1",
         description="Larger English model (1024d) for higher-quality embeddings.",
-    ),
-    "all-minilm-l6-v2": SupportedEmbeddingModel(
-        key="all-minilm-l6-v2",
-        model_id="sentence-transformers/all-MiniLM-L6-v2",
-        description="Very small, fast model (384d) suitable for lighter-weight setups.",
     ),
 }
 
@@ -76,8 +76,9 @@ def _resolve_model_id() -> str:
 def get_default_embedding_model() -> EmbeddingModel:
     """Return the default embedding model.
 
-    By default this uses the `bge-small-en-v1` profile, which
-    corresponds to the Hugging Face model `BAAI/bge-small-en-v1`.
+    By default this uses the `all-minilm-l6-v2` profile, which
+    corresponds to the Hugging Face model
+    `sentence-transformers/all-MiniLM-L6-v2`.
 
     You can override this in two ways:
 
