@@ -85,6 +85,20 @@ class SearchResponse(BaseModel):
     page_end: Optional[int] = None
 
 
+@app.get("/health")
+def api_health() -> dict:
+    """Simple health check endpoint.
+
+    Returns basic status and whether core components are initialized.
+    """
+
+    return {
+        "status": "ok",
+        "model_loaded": state.embedder is not None,
+        "vector_store_initialized": state.vector_store is not None,
+    }
+
+
 @app.post("/extract")
 def api_extract(payload: ExtractRequest) -> dict:
     root = Path(payload.root_folder).expanduser()
