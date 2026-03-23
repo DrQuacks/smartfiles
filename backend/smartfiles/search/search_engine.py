@@ -2,22 +2,30 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from smartfiles.embeddings.embedding_model import get_default_embedding_model
-from smartfiles.database.vector_store import get_default_vector_store
+from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
+from smartfiles.database.vector_store import ChromaVectorStore, get_default_vector_store
 
 
-def run_search(*, query: str, k: int = 5) -> List[Dict[str, Any]]:
+def run_search(
+    *,
+    query: str,
+    k: int = 5,
+    embedder: Optional[EmbeddingModel] = None,
+    store: Optional[ChromaVectorStore] = None,
+) -> List[Dict[str, Any]]:
     if not query.strip():
         return []
 
     profile = os.getenv("SMARTFILES_PROFILE_SEARCH", "").lower() in {"1", "true", "yes"}
 
     t0 = time.perf_counter()
-    embedder = get_default_embedding_model()
+    if embedder is None:
+        embedder = get_default_embedding_model()
     t1 = time.perf_counter()
-    store = get_default_vector_store(recreate=False)
+    if store is None:
+        store = get_default_vector_store(recreate=False)
     t2 = time.perf_counter()
 
     embedding = embedder.embed_texts([query])[0]
