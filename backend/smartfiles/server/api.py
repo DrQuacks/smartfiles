@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
@@ -17,6 +18,21 @@ from smartfiles.search.search_engine import run_search
 
 
 app = FastAPI(title="SmartFiles API", version="0.1.0")
+
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class AppState:
