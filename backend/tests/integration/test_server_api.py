@@ -31,8 +31,11 @@ class DummyVectorStore:
     def __init__(self) -> None:
         self.calls: list[tuple[list[list[float]], int]] = []
 
-    def search(self, query_embeddings: list[list[float]], k: int = 5) -> list[dict[str, Any]]:
-        self.calls.append((query_embeddings, k))
+    def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
+        # Wrap the single embedding in a list so tests can continue to
+        # treat this as a batch of size 1, matching the real
+        # ChromaVectorStore.search signature used by run_search.
+        self.calls.append(([query_embedding], k))
         return [
             {
                 "id": "dummy-1",

@@ -13,3 +13,11 @@ export type SearchResult = {
   page_start?: number
   page_end?: number
 }
+
+export type Folder = {
+  folder_name: string
+  path: string
+  raw_text_dir_name: string
+  last_indexed?: string | null
+  last_commit?: string | null
+}

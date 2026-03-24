@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import { API_BASE_URL } from './config'
-import type { Health, SearchResult } from './components/types'
+import type { Folder, Health, SearchResult } from './components/types'
 import Header from './components/Header'
 import DocumentList from './components/DocumentList'
 import PreviewPanel from './components/PreviewPanel'
@@ -14,6 +14,14 @@ function App() {
 
   const [query, setQuery] = useState('')
   const [k, setK] = useState(5)
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [selectedFolderNames, setSelectedFolderNames] = useState<string[]>([])
+  const [foldersError, setFoldersError] = useState<string | null>(null)
+
+  const [indexPath, setIndexPath] = useState('')
+  const [isIndexing, setIsIndexing] = useState(false)
+  const [indexError, setIndexError] = useState<string | null>(null)
+  const [indexStatus, setIndexStatus] = useState<string | null>(null)
   const [results, setResults] = useState<SearchResult[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const selectedResult = selectedIndex != null ? results[selectedIndex] : null
@@ -40,6 +48,26 @@ function App() {
     fetchHealth()
   }, [])
 
+  useEffect(() => {
+    const fetchFolders = async () => {
+      try {
+        setFoldersError(null)
+        const res = await fetch(`${API_BASE_URL}/folders`)
+        if (!res.ok) {
+          throw new Error(`Folders fetch failed: ${res.status}`)
+        }
+        const data: Folder[] = await res.json()
+        setFolders(data)
+      } catch (error) {
+        console.error(error)
+        setFolders([])
+        setFoldersError('Unable to load indexed folders')
+      }
+    }
+
+    fetchFolders()
+  }, [])
+
   const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmed = query.trim()
@@ -59,6 +87,9 @@ function App() {
         query: trimmed,
         k: chunksK.toString(),
       })
+      if (selectedFolderNames.length > 0) {
+        params.set('folders', selectedFolderNames.join(','))
+      }
       const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`)
       if (!res.ok) {
         throw new Error(`Search failed: ${res.status}`)
@@ -76,6 +107,51 @@ function App() {
     }
   }
 
+  const handleIndexFolder = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmed = indexPath.trim()
+    if (!trimmed) {
+      setIndexError('Please enter a folder path')
+      setIndexStatus(null)
+      return
+    }
+
+    setIsIndexing(true)
+    setIndexError(null)
+    setIndexStatus(null)
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/index`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ root_folder: trimmed }),
+      })
+      if (!res.ok) {
+        throw new Error(`Indexing failed: ${res.status}`)
+      }
+
+      setIndexStatus('Indexing completed successfully')
+
+      // Refresh the list of indexed folders so the new one appears
+      try {
+        const foldersRes = await fetch(`${API_BASE_URL}/folders`)
+        if (foldersRes.ok) {
+          const data: Folder[] = await foldersRes.json()
+          setFolders(data)
+        }
+      } catch (error) {
+        console.error(error)
+      }
+    } catch (error) {
+      console.error(error)
+      setIndexError('Indexing request failed')
+    } finally {
+      setIsIndexing(false)
+    }
+  }
+
   return (
     <div className="app-container">
       <Header
@@ -85,9 +161,19 @@ function App() {
         k={k}
         isSearching={isSearching}
         searchError={searchError}
+        folders={folders}
+        foldersError={foldersError}
+        selectedFolderNames={selectedFolderNames}
+        onSelectedFolderNamesChange={setSelectedFolderNames}
+        indexPath={indexPath}
+        isIndexing={isIndexing}
+        indexError={indexError}
+        indexStatus={indexStatus}
+        onIndexPathChange={setIndexPath}
         onQueryChange={setQuery}
         onKChange={setK}
         onSearchSubmit={handleSearch}
+        onIndexFolderSubmit={handleIndexFolder}
       />
 
       <main className="app-main">

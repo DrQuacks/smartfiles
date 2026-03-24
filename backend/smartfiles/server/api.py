@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +16,7 @@ from smartfiles.ingestion.indexer import (
     run_indexing_pipeline,
 )
 from smartfiles.search.search_engine import run_search
+from smartfiles.folder_registry import FolderEntry, list_folders
 
 
 app = FastAPI(title="SmartFiles API", version="0.1.0")
@@ -86,6 +87,15 @@ class SearchResponse(BaseModel):
     chunk_index: Optional[int] = None
     page_start: Optional[int] = None
     page_end: Optional[int] = None
+    folder_name: Optional[str] = None
+
+
+class FolderInfo(BaseModel):
+    folder_name: str
+    path: str
+    raw_text_dir_name: str
+    last_indexed: Optional[str] = None
+    last_commit: Optional[str] = None
 
 
 @app.get("/health")
@@ -144,8 +154,63 @@ def api_index(payload: IndexRequest) -> dict:
     return {"status": "ok"}
 
 
+def _folder_name_for_filepath(filepath: str, entries: List[FolderEntry]) -> Optional[str]:
+    """Return the logical folder_name for a given file path, if any.
+
+    This walks the registry entries and finds the longest root path
+    that is a prefix of the given file path. If none match, returns
+    None and the result is treated as unscoped.
+    """
+
+    if not filepath:
+        return None
+
+    file_path = Path(filepath).expanduser().resolve()
+
+    best_name: Optional[str] = None
+    best_len = -1
+    for entry in entries:
+        root = Path(entry.path).expanduser().resolve()
+        try:
+            file_path.relative_to(root)
+        except ValueError:
+            continue
+        root_len = len(str(root))
+        if root_len > best_len:
+            best_len = root_len
+            best_name = entry.folder_name
+
+    return best_name
+
+
+@app.get("/folders", response_model=list[FolderInfo])
+def api_folders() -> list[FolderInfo]:
+    """Return all folders that have been indexed.
+
+    Only entries with a non-empty ``last_indexed`` field are returned,
+    so the dropdown shows folders that have completed at least one
+    extraction/indexing run.
+    """
+
+    entries = list_folders()
+    indexed: list[FolderInfo] = []
+    for entry in entries:
+        if not entry.last_indexed:
+            continue
+        indexed.append(
+            FolderInfo(
+                folder_name=entry.folder_name,
+                path=entry.path,
+                raw_text_dir_name=entry.raw_text_dir_name,
+                last_indexed=entry.last_indexed,
+                last_commit=entry.last_commit,
+            )
+        )
+    return indexed
+
+
 @app.get("/search", response_model=list[SearchResponse])
-def api_search(query: str, k: int = 5) -> list[SearchResponse]:
+def api_search(query: str, k: int = 5, folders: Optional[str] = None) -> list[SearchResponse]:
     if not query.strip():
         return []
 
@@ -154,7 +219,32 @@ def api_search(query: str, k: int = 5) -> list[SearchResponse]:
 
     results = run_search(query=query, k=k, embedder=state.embedder, store=state.vector_store)
 
-    return [SearchResponse(**r) for r in results]
+    # Attach folder_name to each result if we can resolve it from the
+    # registry, and optionally filter to a subset of folders when the
+    # client provides a comma-separated list of folder names.
+    registry_entries = list_folders()
+    allowed: Optional[set[str]] = None
+    if folders:
+        names = [name.strip() for name in folders.split(",") if name.strip()]
+        if names:
+            allowed = set(names)
+
+    filtered: list[dict] = []
+    for item in results:
+        filepath = item.get("filepath") if isinstance(item, dict) else None
+        folder_name = _folder_name_for_filepath(filepath or "", registry_entries)
+        if folder_name:
+            item["folder_name"] = folder_name
+
+        if allowed is not None:
+            # When a filter is provided, only include items that
+            # belong to one of the requested folders.
+            if folder_name in allowed:
+                filtered.append(item)
+        else:
+            filtered.append(item)
+
+    return [SearchResponse(**r) for r in filtered]
 
 
 @app.get("/file")

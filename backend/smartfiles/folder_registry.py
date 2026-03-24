@@ -79,6 +79,17 @@ def _save_registry(entries: List[FolderEntry]) -> None:
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def list_folders() -> List[FolderEntry]:
+    """Return all known folder entries from the registry.
+
+    This is a thin wrapper around the internal loader so other
+    modules (such as the API layer) can inspect the registry
+    without relying on private helpers.
+    """
+
+    return _load_registry()
+
+
 def ensure_folder_entry(root_folder: Path) -> FolderEntry:
     """Return or create a registry entry for the given root folder.
 
