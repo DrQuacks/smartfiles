@@ -67,7 +67,6 @@ export default function PreviewPanel({ selectedResult }: PreviewPanelProps) {
               <p className="preview-name">
                 {getFileName(selectedResult.filepath)}
               </p>
-              <p className="preview-path">{selectedResult.filepath}</p>
             </>
           )}
           {renderPreview(selectedResult)}
