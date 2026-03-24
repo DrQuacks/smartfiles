@@ -251,13 +251,13 @@ function App() {
                     onClick={() => setSelectedIndex(index)}
                   >
                     <div className="result-header">
-                      <span className="result-score">
-                        {result.score.toFixed(1)}
-                      </span>
                       <span className="result-name">{fileName}</span>
                       {pageLabel && (
                         <span className="result-page">{pageLabel}</span>
                       )}
+                      <span className="result-score">
+                        {result.score.toFixed(1)}
+                      </span>
                     </div>
                     {result.filepath && (
                       <div className="result-meta">
