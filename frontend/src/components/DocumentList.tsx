@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import type { SearchResult } from './types'
+import type { AggregatedResult } from './searchUtils'
 import { formatPageRange, getFileName } from './searchUtils'
 
 export type DocumentListProps = {
@@ -47,7 +48,15 @@ export default function DocumentList({
       >
         <ul className="results-list">
           {results.map((result, index) => {
-            const pageLabel = formatPageRange(result)
+            const hitPages = (result as AggregatedResult).hit_pages
+            const pageLabels =
+              hitPages && hitPages.length > 0
+                ? hitPages
+                : (() => {
+                    const label = formatPageRange(result)
+                    return label ? [label] : []
+                  })()
+            const primaryPage = pageLabels[0]
             const isSelected = selectedIndex === index
             const fileName = getFileName(result.filepath) ?? '(unknown file)'
             return (
@@ -60,8 +69,8 @@ export default function DocumentList({
               >
                 <div className="result-header">
                   <span className="result-name">{fileName}</span>
-                  {pageLabel && (
-                    <span className="result-page">{pageLabel}</span>
+                  {primaryPage && (
+                    <span className="result-page">{primaryPage}</span>
                   )}
                   <span className="result-score">
                     {result.score.toFixed(1)}
@@ -70,6 +79,18 @@ export default function DocumentList({
                 {result.filepath && (
                   <div className="result-meta">
                     <span className="result-path">{result.filepath}</span>
+                    {pageLabels.length > 1 && (
+                      <div className="result-pages-list">
+                        {pageLabels.map((label) => (
+                          <span
+                            key={label}
+                            className="result-page-chip"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </li>

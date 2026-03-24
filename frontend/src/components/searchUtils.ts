@@ -24,3 +24,45 @@ export function formatPageRange(result: SearchResult): string | null {
   if (page_end != null) return `Up to page ${page_end}`
   return null
 }
+
+export type AggregatedResult = SearchResult & {
+  hit_pages?: string[]
+}
+
+export function dedupeResultsByFile(
+  results: SearchResult[],
+  k: number,
+): AggregatedResult[] {
+  const byFile = new Map<
+    string,
+    {
+      result: SearchResult
+      pages: Set<string>
+    }
+  >()
+
+  for (const result of results) {
+    const key = result.filepath ?? result.id
+    const pageLabel = formatPageRange(result)
+    const existing = byFile.get(key)
+
+    if (!existing) {
+      const pages = new Set<string>()
+      if (pageLabel) pages.add(pageLabel)
+      byFile.set(key, { result, pages })
+    } else {
+      if (result.score > existing.result.score) {
+        existing.result = result
+      }
+      if (pageLabel) existing.pages.add(pageLabel)
+    }
+  }
+
+  const aggregated: AggregatedResult[] = []
+  for (const { result, pages } of byFile.values()) {
+    aggregated.push({ ...result, hit_pages: Array.from(pages) })
+  }
+
+  aggregated.sort((a, b) => b.score - a.score)
+  return aggregated.slice(0, k)
+}

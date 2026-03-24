@@ -6,6 +6,7 @@ import type { Health, SearchResult } from './components/types'
 import Header from './components/Header'
 import DocumentList from './components/DocumentList'
 import PreviewPanel from './components/PreviewPanel'
+import { dedupeResultsByFile } from './components/searchUtils'
 
 function App() {
   const [health, setHealth] = useState<Health | null>(null)
@@ -53,14 +54,19 @@ function App() {
     setSearchError(null)
 
     try {
-      const params = new URLSearchParams({ query: trimmed, k: k.toString() })
+      const chunksK = Math.min(Math.max(k * 5, k + 5), 100)
+      const params = new URLSearchParams({
+        query: trimmed,
+        k: chunksK.toString(),
+      })
       const res = await fetch(`${API_BASE_URL}/search?${params.toString()}`)
       if (!res.ok) {
         throw new Error(`Search failed: ${res.status}`)
       }
       const data: SearchResult[] = await res.json()
-      setResults(data)
-      setSelectedIndex(data.length > 0 ? 0 : null)
+      const aggregated = dedupeResultsByFile(data, k)
+      setResults(aggregated)
+      setSelectedIndex(aggregated.length > 0 ? 0 : null)
     } catch (error) {
       console.error(error)
       setSearchError('Search request failed')
