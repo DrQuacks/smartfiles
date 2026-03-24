@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
@@ -154,3 +155,18 @@ def api_search(query: str, k: int = 5) -> list[SearchResponse]:
     results = run_search(query=query, k=k, embedder=state.embedder, store=state.vector_store)
 
     return [SearchResponse(**r) for r in results]
+
+
+@app.get("/file")
+def api_file(filepath: str) -> FileResponse:
+    """Serve the original file for a search result.
+
+    This is intended for local use only and assumes that filepaths
+    come from SmartFiles' own indexing process.
+    """
+
+    path = Path(filepath).expanduser()
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(path)

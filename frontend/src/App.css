@@ -1,5 +1,4 @@
-.
-app-container {
+.app-container {
   max-width: 960px;
   margin: 0 auto;
   padding: 2rem 1.5rem 3rem;
@@ -9,6 +8,12 @@ app-container {
 }
 
 .app-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -52,7 +57,7 @@ app-container {
 
 .app-main {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.9fr);
+  grid-template-columns: minmax(0, 0.35fr) minmax(0, 0.65fr);
   gap: 1.5rem;
 }
 
@@ -79,10 +84,11 @@ app-container {
   font-size: 1.1rem;
 }
 
-.search-form {
+.search-bar {
   display: flex;
-  flex-direction: column;
+  align-items: flex-end;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .field {
@@ -147,6 +153,7 @@ app-container {
   border: 1px solid rgba(255, 255, 255, 0.05);
   padding: 0.7rem 0.8rem;
   background: radial-gradient(circle at top left, #1b1b1b, #050505);
+  cursor: pointer;
 }
 
 .result-header {
@@ -176,9 +183,9 @@ app-container {
   color: #2cb67d;
 }
 
-.result-text {
-  font-size: 0.9rem;
-  line-height: 1.4;
+.result-item-selected {
+  border-color: rgba(127, 90, 240, 0.9);
+  box-shadow: 0 0 0 1px rgba(127, 90, 240, 0.6);
 }
 
 .muted {
@@ -190,4 +197,71 @@ app-container {
   margin-top: 0.5rem;
   font-size: 0.85rem;
   color: #ff6b6b;
+}
+
+.error-inline {
+  margin-top: 0.25rem;
+}
+
+.document-list {
+  margin-top: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.result-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.result-meta {
+  margin-top: 0.1rem;
+}
+
+.preview-container {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.preview-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.preview-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.preview-path {
+  font-size: 0.8rem;
+  color: var(--text-soft, #aaa);
+  word-break: break-all;
+}
+
+.preview-frame {
+  width: 100%;
+  min-height: 360px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background-color: #000;
+}
+
+.preview-image {
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background-color: #000;
+}
+
+.preview-link {
+  font-size: 0.9rem;
+  color: #7f5af0;
+  text-decoration: underline;
 }
