@@ -6,8 +6,11 @@ function buildFileUrl(result: SearchResult): string | null {
   if (!result.filepath) return null
   const base = `${API_BASE_URL}/file?filepath=${encodeURIComponent(result.filepath)}`
   const ext = getFileExtension(result.filepath)
-  if (ext === 'pdf' && result.page_start != null) {
-    return `${base}#page=${result.page_start}`
+  if (ext === 'pdf') {
+    const pageFragment = result.page_start != null ? `page=${result.page_start}` : ''
+    const viewerParams = ['toolbar=0', 'navpanes=0', 'scrollbar=1']
+    const fragmentParts = [pageFragment, ...viewerParams].filter(Boolean)
+    return fragmentParts.length ? `${base}#${fragmentParts.join('&')}` : base
   }
   return base
 }
