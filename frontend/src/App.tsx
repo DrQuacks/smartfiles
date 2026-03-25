@@ -154,6 +154,47 @@ function App() {
     }
   }
 
+  const handleDeleteFolder = async (folderName: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/folders/${encodeURIComponent(folderName)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        throw new Error(`Delete failed: ${res.status}`)
+      }
+
+      // Refresh folders after deletion
+      const foldersRes = await fetch(`${API_BASE_URL}/folders`)
+      if (foldersRes.ok) {
+        const data: Folder[] = await foldersRes.json()
+        setFolders(data)
+      }
+    } catch (error) {
+      console.error(error)
+      setFoldersError('Unable to delete folder')
+    }
+  }
+
+  const handleReorderFolders = async (orderedFolderNames: string[]) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/folders/reorder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order: orderedFolderNames }),
+      })
+      if (!res.ok) {
+        throw new Error(`Reorder failed: ${res.status}`)
+      }
+      const data: Folder[] = await res.json()
+      setFolders(data)
+    } catch (error) {
+      console.error(error)
+      setFoldersError('Unable to reorder folders')
+    }
+  }
+
   return (
     <div className="app-container">
       <Header
@@ -186,7 +227,7 @@ function App() {
           <PreviewPanel selectedResult={selectedResult} />
         </main>
       ) : (
-        <main className="app-main">
+        <main className="app-main app-main-manage">
           <ManageFoldersPanel
             folders={folders}
             foldersError={foldersError}
@@ -196,6 +237,8 @@ function App() {
             indexStatus={indexStatus}
             onIndexPathChange={setIndexPath}
             onIndexFolderSubmit={handleIndexFolder}
+            onDeleteFolder={handleDeleteFolder}
+            onReorderFolders={handleReorderFolders}
           />
         </main>
       )}

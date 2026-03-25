@@ -90,6 +90,48 @@ def list_folders() -> List[FolderEntry]:
     return _load_registry()
 
 
+def delete_folder_by_name(folder_name: str) -> bool:
+    """Remove a folder entry from the registry by its logical name.
+
+    Returns True if an entry was removed, False if no matching entry
+    was found. This only affects the registry ordering and metadata;
+    it does not delete any on-disk data or index contents.
+    """
+
+    entries = _load_registry()
+    new_entries = [e for e in entries if e.folder_name != folder_name]
+    if len(new_entries) == len(entries):
+        return False
+    _save_registry(new_entries)
+    return True
+
+
+def reorder_folders(order: List[str]) -> List[FolderEntry]:
+    """Reorder registry entries to match the provided folder_name list.
+
+    Any entries whose names are not present in ``order`` retain their
+    relative ordering and are appended after the explicitly ordered
+    entries. The updated list is persisted and returned.
+    """
+
+    entries = _load_registry()
+    by_name = {e.folder_name: e for e in entries}
+
+    ordered: List[FolderEntry] = []
+    for name in order:
+        entry = by_name.pop(name, None)
+        if entry is not None:
+            ordered.append(entry)
+
+    # Append any remaining entries in their original order.
+    for e in entries:
+        if e.folder_name in by_name:
+            ordered.append(e)
+
+    _save_registry(ordered)
+    return ordered
+
+
 def ensure_folder_entry(root_folder: Path) -> FolderEntry:
     """Return or create a registry entry for the given root folder.
 

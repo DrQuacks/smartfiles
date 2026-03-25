@@ -16,7 +16,12 @@ from smartfiles.ingestion.indexer import (
     run_indexing_pipeline,
 )
 from smartfiles.search.search_engine import run_search
-from smartfiles.folder_registry import FolderEntry, list_folders
+from smartfiles.folder_registry import (
+    FolderEntry,
+    delete_folder_by_name,
+    list_folders,
+    reorder_folders,
+)
 
 
 app = FastAPI(title="SmartFiles API", version="0.1.0")
@@ -96,6 +101,10 @@ class FolderInfo(BaseModel):
     raw_text_dir_name: str
     last_indexed: Optional[str] = None
     last_commit: Optional[str] = None
+
+
+class ReorderFoldersRequest(BaseModel):
+    order: list[str]
 
 
 @app.get("/health")
@@ -189,12 +198,54 @@ def api_folders() -> list[FolderInfo]:
 
     Only entries with a non-empty ``last_indexed`` field are returned,
     so the dropdown shows folders that have completed at least one
-    extraction/indexing run.
+    extraction/indexing run. The ordering reflects the registry order,
+    which can be adjusted via the reorder endpoint.
     """
 
     entries = list_folders()
     indexed: list[FolderInfo] = []
     for entry in entries:
+        if not entry.last_indexed:
+            continue
+        indexed.append(
+            FolderInfo(
+                folder_name=entry.folder_name,
+                path=entry.path,
+                raw_text_dir_name=entry.raw_text_dir_name,
+                last_indexed=entry.last_indexed,
+                last_commit=entry.last_commit,
+            )
+        )
+    return indexed
+
+
+@app.delete("/folders/{folder_name}")
+def api_delete_folder(folder_name: str) -> dict:
+    """Delete a folder entry from the registry by its logical name.
+
+    This affects ordering and visibility in the UI only; it does not
+    currently delete any on-disk data or index contents.
+    """
+
+    removed = delete_folder_by_name(folder_name)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return {"status": "ok"}
+
+
+@app.post("/folders/reorder", response_model=list[FolderInfo])
+def api_reorder_folders(payload: ReorderFoldersRequest) -> list[FolderInfo]:
+    """Update the registry ordering for folders.
+
+    The client sends an ordered list of folder_name values; any
+    registered folders not mentioned keep their relative order and
+    appear after the explicitly ordered entries.
+    """
+
+    reordered_entries = reorder_folders(payload.order)
+
+    indexed: list[FolderInfo] = []
+    for entry in reordered_entries:
         if not entry.last_indexed:
             continue
         indexed.append(
