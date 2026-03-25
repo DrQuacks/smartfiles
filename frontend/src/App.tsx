@@ -6,6 +6,7 @@ import type { Folder, Health, SearchResult } from './components/types'
 import Header from './components/Header'
 import DocumentList from './components/DocumentList'
 import PreviewPanel from './components/PreviewPanel'
+import ManageFoldersPanel from './components/ManageFoldersPanel'
 import { dedupeResultsByFile } from './components/searchUtils'
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
   const [isIndexing, setIsIndexing] = useState(false)
   const [indexError, setIndexError] = useState<string | null>(null)
   const [indexStatus, setIndexStatus] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'search' | 'folders'>('search')
   const [results, setResults] = useState<SearchResult[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
   const selectedResult = selectedIndex != null ? results[selectedIndex] : null
@@ -161,31 +163,42 @@ function App() {
         k={k}
         isSearching={isSearching}
         searchError={searchError}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         folders={folders}
         foldersError={foldersError}
         selectedFolderNames={selectedFolderNames}
         onSelectedFolderNamesChange={setSelectedFolderNames}
-        indexPath={indexPath}
-        isIndexing={isIndexing}
-        indexError={indexError}
-        indexStatus={indexStatus}
-        onIndexPathChange={setIndexPath}
         onQueryChange={setQuery}
         onKChange={setK}
         onSearchSubmit={handleSearch}
-        onIndexFolderSubmit={handleIndexFolder}
       />
 
-      <main className="app-main">
-        <DocumentList
-          results={results}
-          selectedIndex={selectedIndex}
-          onSelectedIndexChange={setSelectedIndex}
-          searchError={searchError}
-        />
+      {activeTab === 'search' ? (
+        <main className="app-main">
+          <DocumentList
+            results={results}
+            selectedIndex={selectedIndex}
+            onSelectedIndexChange={setSelectedIndex}
+            searchError={searchError}
+          />
 
-        <PreviewPanel selectedResult={selectedResult} />
-      </main>
+          <PreviewPanel selectedResult={selectedResult} />
+        </main>
+      ) : (
+        <main className="app-main">
+          <ManageFoldersPanel
+            folders={folders}
+            foldersError={foldersError}
+            indexPath={indexPath}
+            isIndexing={isIndexing}
+            indexError={indexError}
+            indexStatus={indexStatus}
+            onIndexPathChange={setIndexPath}
+            onIndexFolderSubmit={handleIndexFolder}
+          />
+        </main>
+      )}
     </div>
   )
 }
