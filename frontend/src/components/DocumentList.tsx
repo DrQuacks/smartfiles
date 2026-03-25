@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from 'react'
+import { useEffect, useRef } from 'react'
 import type { SearchResult } from './types'
 import type { AggregatedResult } from './searchUtils'
 import { formatPageRange, getFileName } from './searchUtils'
@@ -16,6 +17,16 @@ export default function DocumentList({
   onSelectedIndexChange,
   searchError,
 }: DocumentListProps) {
+  const listRef = useRef<HTMLUListElement | null>(null)
+
+  useEffect(() => {
+    if (selectedIndex == null || !listRef.current) return
+    const item = listRef.current.children[selectedIndex] as HTMLElement | undefined
+    if (item) {
+      item.scrollIntoView({ block: 'nearest' })
+    }
+  }, [selectedIndex])
+
   return (
     <section className="panel list-panel">
       <h2>Documents</h2>
@@ -46,7 +57,7 @@ export default function DocumentList({
           }
         }}
       >
-        <ul className="results-list">
+        <ul className="results-list" ref={listRef}>
           {results.map((result, index) => {
             const hitPages = (result as AggregatedResult).hit_pages
             const pageLabels =

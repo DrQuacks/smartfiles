@@ -35,23 +35,34 @@ function renderPreview(result: SearchResult) {
 
   if (ext === 'png' || ext === 'jpg' || ext === 'jpeg') {
     return (
-      <img
-        className="preview-image"
-        src={fileUrl}
-        alt="Document preview"
-      />
+      <div className="preview-frame preview-image-frame">
+        <img
+          className="preview-image"
+          src={fileUrl}
+          alt="Document preview"
+        />
+      </div>
     )
   }
 
+  const isDocx = ext === 'docx'
+
   return (
-    <a
-      className="preview-link"
-      href={fileUrl}
-      target="_blank"
-      rel="noreferrer"
-    >
-      Open file in new tab
-    </a>
+    <div className="preview-frame preview-fallback">
+      <p className="preview-fallback-text">
+        {isDocx
+          ? 'Inline preview is not available for Word documents.'
+          : 'Inline preview is not available for this file type.'}
+      </p>
+      <a
+        className="preview-link"
+        href={fileUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open file in new tab
+      </a>
+    </div>
   )
 }
 
