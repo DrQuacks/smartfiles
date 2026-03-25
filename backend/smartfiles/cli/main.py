@@ -9,6 +9,8 @@ from smartfiles.ingestion.indexer import (
     chunk_corpus_from_text,
 )
 from smartfiles.search.search_engine import run_search
+from smartfiles.embeddings.embedding_model import get_default_embedding_model
+from smartfiles.database.vector_store import get_default_vector_store
 
 app = typer.Typer(help="SmartFiles CLI: index and search your documents.")
 
@@ -140,6 +142,53 @@ def search(
         if len(snippet) > 120:
             snippet = snippet[:117] + "..."
         typer.echo(f"{rank:2d}. [{score:5.1f}] {path}{page_info}\n    {snippet}")
+
+
+@app.command()
+def debug_scores(
+    query: str = typer.Argument(..., help="Search query to debug"),
+    k: int = typer.Option(10, "-k", "--top-k", help="Number of results to inspect"),
+):
+    """Run a query and log raw distances and cosine-like scores.
+
+    This command uses the same embedder and vector store as the
+    regular search path, but enables additional logging so you can
+    manually inspect:
+
+    - the raw distances returned by Chroma
+    - the derived similarity s = 1 - d (clamped to [-1, 1])
+    - the final score = (s + 1) / 2 * 100
+
+    Enable more verbose internal logging by setting the
+    SMARTFILES_DEBUG_SCORES=1 environment variable when running this
+    command.
+    """
+
+    embedder = get_default_embedding_model()
+    store = get_default_vector_store(recreate=False)
+
+    embedding = embedder.embed_texts([query])[0]
+    results = store.search(query_embedding=embedding, k=k)
+
+    if not results:
+        typer.echo("No results found.")
+        raise typer.Exit(code=0)
+
+    for rank, result in enumerate(results, start=1):
+        score = result.get("score", 0.0)
+        path = result.get("filepath", "?")
+        dist = result.get("distance")
+        sim = None
+        if dist is not None:
+            try:
+                raw_dist = float(dist)
+                sim = 1.0 - raw_dist
+            except Exception:
+                sim = None
+
+        typer.echo(f"rank={rank:2d} score={score:6.2f} filepath={path}")
+        if dist is not None:
+            typer.echo(f"    raw_dist={dist!r} sim_from_dist={sim}")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -20,11 +20,20 @@ class ChromaVectorStore:
         db_path.mkdir(parents=True, exist_ok=True)
 
         self._client = chromadb.PersistentClient(path=str(db_path), settings=Settings())
-        self._collection = self._client.get_or_create_collection(name=collection_name)
+        # Explicitly use cosine distance for this collection so that
+        # distances correspond to ``1 - cosine_similarity`` and the
+        # scoring logic can safely treat them as such.
+        self._collection = self._client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
 
     def reset(self) -> None:
         self._client.delete_collection(name=self._collection.name)
-        self._collection = self._client.get_or_create_collection(name=self._collection.name)
+        self._collection = self._client.get_or_create_collection(
+            name=self._collection.name,
+            metadata={"hnsw:space": "cosine"},
+        )
 
     def add_documents(self, chunks: List[DocumentChunk], embeddings: List[List[float]]) -> None:
         if not chunks:
@@ -51,25 +60,48 @@ class ChromaVectorStore:
     def search(self, query_embedding: List[float], k: int = 5) -> List[Dict[str, Any]]:
         if not query_embedding:
             return []
-        result = self._collection.query(query_embeddings=[query_embedding], n_results=k)
+
+        # Always ask Chroma to return distances so we can log and
+        # inspect them when needed.
+        result = self._collection.query(
+            query_embeddings=[query_embedding],
+            n_results=k,
+            include=["documents", "metadatas", "distances"],
+        )
+
         hits: List[Dict[str, Any]] = []
         ids = result.get("ids", [[]])[0]
         docs = result.get("documents", [[]])[0]
         metadatas = result.get("metadatas", [[]])[0]
         distances = result.get("distances", [[]])[0]
 
-        for _id, doc, meta, dist in zip(ids, docs, metadatas, distances):
-            # Chroma returns a distance value where smaller is better.
-            # For cosine distance (the default), values are typically
-            # in [0, 2]. We convert this to a human-friendly similarity
-            # score in [0, 100], where higher is better.
+        # Optional diagnostic logging: when SMARTFILES_DEBUG_SCORES is
+        # set, log raw distances and derived cosine similarities for
+        # manual inspection.
+        debug_scores = os.getenv("SMARTFILES_DEBUG_SCORES", "").lower() in {"1", "true", "yes"}
+
+        for rank, (_id, doc, meta, dist) in enumerate(
+            zip(ids, docs, metadatas, distances), start=1
+        ):
             if dist is None:
                 score = 0.0
+                sim = 0.0
             else:
-                sim = 1.0 - float(dist)  # similarity ~ 1 - distance
-                # Clamp to a reasonable cosine range [-1, 1].
+                raw_dist = float(dist)
+                # Assuming Chroma is configured for cosine distance,
+                # convert back to a cosine-like similarity.
+                sim = 1.0 - raw_dist
+                # Clamp to the theoretical cosine range [-1, 1].
                 sim = max(-1.0, min(1.0, sim))
                 score = (sim + 1.0) / 2.0 * 100.0
+
+            if debug_scores:
+                print(
+                    f"[DEBUG] rank={rank} id={_id} dist={dist!r} "
+                    f"sim_from_dist={sim:.6f} score={score:.2f}",
+                    flush=True,
+                )
+
             item: Dict[str, Any] = {
                 "id": _id,
                 "text": doc,
