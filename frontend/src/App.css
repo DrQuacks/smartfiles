@@ -177,6 +177,11 @@
   color: var(--text-soft, #777);
 }
 
+.result-path-link {
+  text-decoration: underline;
+  color: #2563eb;
+}
+
 .result-page {
   margin-left: auto;
   font-size: 0.8rem;

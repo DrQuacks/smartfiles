@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { useEffect, useRef } from 'react'
+import { API_BASE_URL } from '../config'
 import type { SearchResult } from './types'
 import type { AggregatedResult } from './searchUtils'
 import { formatPageRange, getFileName } from './searchUtils'
@@ -70,6 +71,9 @@ export default function DocumentList({
             const primaryPage = pageLabels[0]
             const isSelected = selectedIndex === index
             const fileName = getFileName(result.filepath) ?? '(unknown file)'
+            const fileUrl = result.filepath
+              ? `${API_BASE_URL}/file?filepath=${encodeURIComponent(result.filepath)}`
+              : null
             return (
               <li
                 key={result.id}
@@ -89,7 +93,18 @@ export default function DocumentList({
                 </div>
                 {result.filepath && (
                   <div className="result-meta">
-                    <span className="result-path">{result.filepath}</span>
+                    {fileUrl ? (
+                      <a
+                        className="result-path result-path-link"
+                        href={fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {result.filepath}
+                      </a>
+                    ) : (
+                      <span className="result-path">{result.filepath}</span>
+                    )}
                     {pageLabels.length > 1 && (
                       <div className="result-pages-list">
                         {pageLabels.map((label) => (
