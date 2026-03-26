@@ -36,6 +36,17 @@ export default function Header({
   onKChange,
   onSearchSubmit,
 }: HeaderProps) {
+  const handleAddFolderFilter = (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    if (selectedFolderNames.includes(trimmed)) return
+    onSelectedFolderNamesChange([...selectedFolderNames, trimmed])
+  }
+
+  const handleRemoveFolderFilter = (name: string) => {
+    onSelectedFolderNamesChange(selectedFolderNames.filter((n) => n !== name))
+  }
+
   return (
     <header className="app-header">
       <div className="header-top">
@@ -99,40 +110,57 @@ export default function Header({
               />
             </label>
 
+            <label className="field field-folder-select">
+              <span>Search folders</span>
+              <select
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (!value) return
+                  handleAddFolderFilter(value)
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  {folders.length === 0 ? 'No indexed folders' : 'All indexed folders'}
+                </option>
+                {folders.map((folder) => (
+                  <option key={folder.folder_name} value={folder.folder_name}>
+                    {folder.folder_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <button type="submit" className="primary-button" disabled={isSearching}>
               {isSearching ? 'Searching…' : 'Search'}
             </button>
           </form>
           {searchError && <p className="error-text error-inline">{searchError}</p>}
 
-          <div className="folder-controls">
-            <div className="folder-scope">
-              <label className="field">
-                <span>Search folders</span>
-                <select
-                  multiple
-                  value={selectedFolderNames}
-                  onChange={(e) => {
-                    const values = Array.from(e.target.selectedOptions).map((opt) => opt.value)
-                    onSelectedFolderNamesChange(values)
-                  }}
+          {foldersError && <p className="error-text error-inline">{foldersError}</p>}
+          {!foldersError && folders.length === 0 && (
+            <p className="helper-text">No indexed folders yet. Use the Manage Folders tab to add one.</p>
+          )}
+          {!foldersError && folders.length > 0 && selectedFolderNames.length === 0 && (
+            <p className="helper-text">Leave empty to search across all indexed folders.</p>
+          )}
+          {selectedFolderNames.length > 0 && (
+            <div className="folder-chip-row">
+              {selectedFolderNames.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="folder-chip"
+                  onClick={() => handleRemoveFolderFilter(name)}
                 >
-                  {folders.map((folder) => (
-                    <option key={folder.folder_name} value={folder.folder_name}>
-                      {folder.folder_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {foldersError && <p className="error-text error-inline">{foldersError}</p>}
-              {!foldersError && folders.length === 0 && (
-                <p className="helper-text">No indexed folders yet. Use the Manage Folders tab to add one.</p>
-              )}
-              {folders.length > 0 && (
-                <p className="helper-text">Leave unselected to search across all indexed folders.</p>
-              )}
+                  <span className="folder-chip-label">{name}</span>
+                  <span className="folder-chip-remove" aria-hidden="true">
+                    ×
+                  </span>
+                </button>
+              ))}
             </div>
-          </div>
+          )}
         </>
       )}
     </header>

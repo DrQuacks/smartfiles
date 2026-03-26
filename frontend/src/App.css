@@ -152,6 +152,15 @@
   max-width: 140px;
 }
 
+.field-folder-select select {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.55rem;
+  background-color: #f9f9fb;
+  color: var(--text, #333);
+  font: inherit;
+}
+
 .primary-button {
   margin-top: 0.25rem;
   align-self: flex-start;
@@ -243,6 +252,12 @@
 
 .error-inline {
   margin-top: 0.25rem;
+}
+
+.helper-text {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-soft, #666);
 }
 
 .document-list {
@@ -427,6 +442,34 @@
   margin-top: 0.35rem;
   font-size: 0.85rem;
   color: var(--text-soft, #555);
+}
+
+.folder-chip-row {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.9);
+  background-color: #f3f4f6;
+  font-size: 0.8rem;
+  color: var(--text-soft, #333);
+  cursor: pointer;
+}
+
+.folder-chip-label {
+  white-space: nowrap;
+}
+
+.folder-chip-remove {
+  font-weight: 600;
 }
 
 @media (max-width: 1100px) {
