@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Iterable
+from typing import Iterable, Optional
 
 from smartfiles.embeddings.embedding_model import get_default_embedding_model
 from smartfiles.database.vector_store import get_default_vector_store
@@ -17,6 +17,26 @@ from smartfiles.folder_registry import ensure_folder_entry, update_folder_metada
 from smartfiles.ingestion.file_scanner import iter_files
 from smartfiles.ingestion.text_extractor import get_default_extractor
 from smartfiles.ingestion.chunker import chunk_document
+
+
+class IndexProgress:
+    """In-memory progress tracker for the indexing pipeline.
+
+    This is a simple best-effort tracker suitable for a single-user
+    local setup. It is not persisted and only one run is tracked at a
+    time.
+    """
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
+        self.stage: str = "idle"
+        self.current: int = 0
+        self.total: int = 0
+
+
+index_progress = IndexProgress()
 
 
 def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False) -> None:
@@ -41,6 +61,11 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
         return
 
     print(f"Extracting text from {len(paths)} files under {root_folder}...")
+
+    # Initialize progress for extraction stage.
+    index_progress.stage = "extracting"
+    index_progress.total = len(paths)
+    index_progress.current = 0
 
     # Prepare a new stats file for this extraction run.
     from datetime import datetime
@@ -142,6 +167,7 @@ def extract_documents(*, root_folder: pathlib.Path, recreate_text: bool = False)
         per_file_lines.append(f"[OK] {path}\n")
         per_file_lines.append(f"  extracted_chars={len(text)}\n\n")
         ok_count += 1
+        index_progress.current += 1
 
     # Record total duration and update registry metadata.
     end_time = datetime.now()
@@ -191,8 +217,15 @@ def build_index_from_corpus(
     vector_store = get_default_vector_store(recreate=recreate_index)
     embedder = get_default_embedding_model()
 
+    # Prepare progress for chunking/embedding stage.
+    # We count documents in the corpus to use as the total.
+    docs: list[tuple[pathlib.Path, str]] = list(iter_corpus_documents(root_folder))
+    index_progress.stage = "chunking"
+    index_progress.total = len(docs)
+    index_progress.current = 0
+
     any_docs = False
-    for original_path, text in iter_corpus_documents(root_folder):
+    for original_path, text in docs:
         any_docs = True
         if not text.strip():
             print(f"[WARN] Empty text in corpus for {original_path}, skipping.")
@@ -218,8 +251,11 @@ def build_index_from_corpus(
                     page_end=chunk.page_end,
                 )
 
+        # We treat chunking completion as the transition to embedding.
+        index_progress.stage = "embedding"
         embeddings = embedder.embed_texts([c.text for c in chunks])
         vector_store.add_documents(chunks=chunks, embeddings=embeddings)
+        index_progress.current += 1
 
     if not any_docs:
         print(
@@ -277,6 +313,7 @@ def chunk_corpus_from_text(
         )
     else:
         print("Chunking complete.")
+    index_progress.stage = "idle"
 
 
 def run_indexing_pipeline(

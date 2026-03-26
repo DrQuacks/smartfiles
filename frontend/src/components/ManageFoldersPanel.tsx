@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Folder } from './types'
+import { API_BASE_URL } from '../config'
 
 export type ManageFoldersPanelProps = {
   folders: Folder[]
@@ -26,6 +28,46 @@ export default function ManageFoldersPanel({
   onDeleteFolder,
   onReorderFolders,
 }: ManageFoldersPanelProps) {
+  const [phaseIndex, setPhaseIndex] = useState(0)
+  const [dots, setDots] = useState('.')
+  const [progressCounts, setProgressCounts] = useState<{ current: number; total: number } | null>(
+    null,
+  )
+
+  useEffect(() => {
+    if (!isIndexing) return
+
+    const dotTimer = window.setInterval(() => {
+      setDots((prev) => {
+        if (prev === '...') return '.'
+        return prev + '.'
+      })
+    }, 400)
+
+    const phaseTimer = window.setInterval(() => {
+      setPhaseIndex((prev) => (prev + 1) % 3)
+    }, 4000)
+
+    const pollTimer = window.setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/index/progress`)
+        if (!res.ok) return
+        const data = (await res.json()) as { stage: string; current: number; total: number }
+        setProgressCounts({ current: data.current, total: data.total })
+      } catch (error) {
+        console.error(error)
+      }
+    }, 1000)
+
+    return () => {
+      window.clearInterval(dotTimer)
+      window.clearInterval(phaseTimer)
+      window.clearInterval(pollTimer)
+    }
+  }, [isIndexing])
+
+  const phaseLabels = ['Extracting text', 'Chunking', 'Creating embeddings']
+
   const handleMove = (folderName: string, direction: 'up' | 'down') => {
     const names = folders.map((f) => f.folder_name)
     const index = names.indexOf(folderName)
@@ -114,6 +156,15 @@ export default function ManageFoldersPanel({
           <button type="submit" className="secondary-button" disabled={isIndexing}>
             {isIndexing ? 'Indexing…' : 'Run index pipeline'}
           </button>
+          {isIndexing && (
+            <p className="index-progress">
+              {phaseLabels[phaseIndex]}
+              {progressCounts && progressCounts.total > 0
+                ? ` (${progressCounts.current} of ${progressCounts.total})`
+                : ''}
+              {dots}
+            </p>
+          )}
           {indexError && <p className="error-text error-inline">{indexError}</p>}
           {indexStatus && !indexError && <p className="success-text">{indexStatus}</p>}
         </form>

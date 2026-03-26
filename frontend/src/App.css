@@ -423,6 +423,12 @@
   margin-top: 0.25rem;
 }
 
+.index-progress {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-soft, #555);
+}
+
 @media (max-width: 1100px) {
   .app-main-manage {
     max-width: 100%;

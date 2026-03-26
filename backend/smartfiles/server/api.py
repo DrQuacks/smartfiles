@@ -14,6 +14,7 @@ from smartfiles.ingestion.indexer import (
     extract_documents,
     build_index_from_corpus,
     run_indexing_pipeline,
+    index_progress,
 )
 from smartfiles.search.search_engine import run_search
 from smartfiles.folder_registry import (
@@ -107,6 +108,12 @@ class ReorderFoldersRequest(BaseModel):
     order: list[str]
 
 
+class IndexProgressResponse(BaseModel):
+    stage: str
+    current: int
+    total: int
+
+
 @app.get("/health")
 def api_health() -> dict:
     """Simple health check endpoint.
@@ -153,6 +160,8 @@ def api_index(payload: IndexRequest) -> dict:
     if not root.exists() or not root.is_dir():
         raise HTTPException(status_code=400, detail="root_folder must be an existing directory")
 
+    # Reset and run a fresh indexing pipeline.
+    index_progress.reset()
     run_indexing_pipeline(
         root_folder=root,
         recreate=payload.recreate,
@@ -161,6 +170,21 @@ def api_index(payload: IndexRequest) -> dict:
         overlap=payload.overlap,
     )
     return {"status": "ok"}
+
+
+@app.get("/index/progress", response_model=IndexProgressResponse)
+def api_index_progress() -> IndexProgressResponse:
+    """Return best-effort progress for the current indexing run.
+
+    This is a simple in-memory tracker intended for single-user local
+    use; it is reset at the start of each /index call.
+    """
+
+    return IndexProgressResponse(
+        stage=index_progress.stage,
+        current=index_progress.current,
+        total=index_progress.total,
+    )
 
 
 def _folder_name_for_filepath(filepath: str, entries: List[FolderEntry]) -> Optional[str]:
