@@ -191,6 +191,7 @@
   position: sticky;
   top: 0.5rem;
   align-self: flex-start;
+  max-height: calc(100vh - 1rem);
 }
 
 .results-list {
@@ -271,7 +272,8 @@
 
 .document-list {
   margin-top: 0.25rem;
-  max-height: 65vh;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
