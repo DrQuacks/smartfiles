@@ -60,15 +60,8 @@ export default function DocumentList({
       >
         <ul className="results-list" ref={listRef}>
           {results.map((result, index) => {
-            const hitPages = (result as AggregatedResult).hit_pages
-            const pageLabels =
-              hitPages && hitPages.length > 0
-                ? hitPages
-                : (() => {
-                    const label = formatPageRange(result)
-                    return label ? [label] : []
-                  })()
-            const primaryPage = pageLabels[0]
+            const pageSummary =
+              (result as AggregatedResult).page_summary ?? formatPageRange(result)
             const isSelected = selectedIndex === index
             const fileName = getFileName(result.filepath) ?? '(unknown file)'
             const fileUrl = result.filepath
@@ -84,8 +77,8 @@ export default function DocumentList({
               >
                 <div className="result-header">
                   <span className="result-name">{fileName}</span>
-                  {primaryPage && (
-                    <span className="result-page">{primaryPage}</span>
+                  {pageSummary && (
+                    <span className="result-page">{pageSummary}</span>
                   )}
                   <span className="result-score">
                     {result.score.toFixed(1)}
@@ -104,18 +97,6 @@ export default function DocumentList({
                       </a>
                     ) : (
                       <span className="result-path">{result.filepath}</span>
-                    )}
-                    {pageLabels.length > 1 && (
-                      <div className="result-pages-list">
-                        {pageLabels.map((label) => (
-                          <span
-                            key={label}
-                            className="result-page-chip"
-                          >
-                            {label}
-                          </span>
-                        ))}
-                      </div>
                     )}
                   </div>
                 )}
