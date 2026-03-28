@@ -191,5 +191,60 @@ def debug_scores(
             typer.echo(f"    raw_dist={dist!r} sim_from_dist={sim}")
 
 
+    @app.command("benchmark-beir")
+    def benchmark_beir(
+        dataset: str = typer.Argument(..., help="BEIR dataset name, e.g. 'scifact'"),
+        split: str = typer.Option(
+            "test",
+            "--split",
+            help="Dataset split to use (typically 'test', 'dev', or 'train')",
+        ),
+        top_k: int = typer.Option(
+            10,
+            "-k",
+            "--top-k",
+            help="Maximum cutoff K for evaluation metrics",
+        ),
+        batch_size: int = typer.Option(
+            128,
+            "--batch-size",
+            help="Batch size when embedding the BEIR corpus",
+        ),
+        skip_index: bool = typer.Option(
+            False,
+            "--skip-index",
+            help="Reuse an existing BEIR index instead of rebuilding it",
+        ),
+    ):
+        """Run a BEIR benchmark using the current SmartFiles stack.
+
+        This command is optional and requires installing the 'benchmark'
+        extra: `pip install .[benchmark]` from the backend directory.
+
+        All benchmark data and indexes are stored under
+        `SMARTFILES_DATA_DIR/benchmarks/beir` and do not affect your
+        normal SmartFiles corpus or index.
+        """
+
+        try:
+            from smartfiles.benchmarks.beir_runner import run_beir_benchmark
+        except Exception as exc:  # pragma: no cover - defensive guard
+            typer.echo(
+                "Error: BEIR benchmarking dependencies are not available.\n"
+                "Install the 'benchmark' extra from the backend directory, e.g.:\n"
+                "  pip install .[benchmark]",
+                err=True,
+            )
+            raise typer.Exit(code=1) from exc
+
+        run_beir_benchmark(
+            dataset_name=dataset,
+            split=split,
+            top_k=top_k,
+            batch_size=batch_size,
+            skip_index=skip_index,
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()

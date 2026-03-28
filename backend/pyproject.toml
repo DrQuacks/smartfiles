@@ -20,3 +20,8 @@ dependencies = [
 
 [project.scripts]
 smartfiles = "smartfiles.cli.main:app"
+
+[project.optional-dependencies]
+benchmark = [
+    "beir>=1.0.0",
+]
