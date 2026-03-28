@@ -47,6 +47,9 @@ export default function Header({
     onSelectedFolderNamesChange(selectedFolderNames.filter((n) => n !== name))
   }
 
+  const isSearchDisabled =
+    isSearching || !query.trim() || selectedFolderNames.length === 0
+
   return (
     <header className="app-header">
       <div className="header-top">
@@ -131,7 +134,7 @@ export default function Header({
               </select>
             </label>
 
-            <button type="submit" className="primary-button" disabled={isSearching}>
+            <button type="submit" className="primary-button" disabled={isSearchDisabled}>
               {isSearching ? 'Searching…' : 'Search'}
             </button>
           </form>

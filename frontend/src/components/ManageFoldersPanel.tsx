@@ -153,7 +153,11 @@ export default function ManageFoldersPanel({
             Enter the full folder path on this machine. A native folder picker
             will be added in a future desktop version.
           </p>
-          <button type="submit" className="secondary-button" disabled={isIndexing}>
+          <button
+            type="submit"
+            className="secondary-button"
+            disabled={isIndexing || !indexPath.trim()}
+          >
             {isIndexing ? 'Indexing…' : 'Run index pipeline'}
           </button>
           {isIndexing && (
