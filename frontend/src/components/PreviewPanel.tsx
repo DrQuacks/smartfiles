@@ -1,6 +1,7 @@
 import type { SearchResult } from './types'
 import { getFileExtension, getFileName } from './searchUtils'
 import { API_BASE_URL } from '../config'
+import DocxPreview from './DocxPreview'
 
 function buildFileUrl(result: SearchResult): string | null {
   if (!result.filepath) return null
@@ -45,14 +46,18 @@ function renderPreview(result: SearchResult) {
     )
   }
 
-  const isDocx = ext === 'docx'
+  if (ext === 'docx') {
+    return (
+      <div className="preview-frame preview-docx-frame">
+        <DocxPreview fileUrl={fileUrl} />
+      </div>
+    )
+  }
 
   return (
     <div className="preview-frame preview-fallback">
       <p className="preview-fallback-text">
-        {isDocx
-          ? 'Inline preview is not available for Word documents.'
-          : 'Inline preview is not available for this file type.'}
+        Inline preview is not available for this file type.
       </p>
       <a
         className="preview-link"
