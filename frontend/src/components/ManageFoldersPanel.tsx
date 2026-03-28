@@ -28,11 +28,11 @@ export default function ManageFoldersPanel({
   onDeleteFolder,
   onReorderFolders,
 }: ManageFoldersPanelProps) {
-  const [phaseIndex, setPhaseIndex] = useState(0)
   const [dots, setDots] = useState('.')
   const [progressCounts, setProgressCounts] = useState<{ current: number; total: number } | null>(
     null,
   )
+  const [progressStage, setProgressStage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isIndexing) return
@@ -44,16 +44,13 @@ export default function ManageFoldersPanel({
       })
     }, 400)
 
-    const phaseTimer = window.setInterval(() => {
-      setPhaseIndex((prev) => (prev + 1) % 3)
-    }, 4000)
-
     const pollTimer = window.setInterval(async () => {
       try {
         const res = await fetch(`${API_BASE_URL}/index/progress`)
         if (!res.ok) return
         const data = (await res.json()) as { stage: string; current: number; total: number }
         setProgressCounts({ current: data.current, total: data.total })
+        setProgressStage(data.stage)
       } catch (error) {
         console.error(error)
       }
@@ -61,12 +58,22 @@ export default function ManageFoldersPanel({
 
     return () => {
       window.clearInterval(dotTimer)
-      window.clearInterval(phaseTimer)
       window.clearInterval(pollTimer)
     }
   }, [isIndexing])
 
-  const phaseLabels = ['Extracting text', 'Chunking', 'Creating embeddings']
+  const resolvedStageLabel = (() => {
+    switch (progressStage) {
+      case 'extracting':
+        return 'Extracting text'
+      case 'chunking':
+        return 'Chunking'
+      case 'embedding':
+        return 'Creating embeddings'
+      default:
+        return 'Indexing'
+    }
+  })()
 
   const handleMove = (folderName: string, direction: 'up' | 'down') => {
     const names = folders.map((f) => f.folder_name)
@@ -162,7 +169,7 @@ export default function ManageFoldersPanel({
           </button>
           {isIndexing && (
             <p className="index-progress">
-              {phaseLabels[phaseIndex]}
+              {resolvedStageLabel}
               {progressCounts && progressCounts.total > 0
                 ? ` (${progressCounts.current} of ${progressCounts.total})`
                 : ''}
