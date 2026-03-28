@@ -58,6 +58,29 @@ Key options:
 - `--batch-size`: Batch size when embedding the corpus (default: 128).
 - `--skip-index`: Reuse an existing benchmark index instead of rebuilding.
 
+You can also attach a free-form label to a run:
+
+- `--tag`: Optional string label, e.g. `--tag "bge-small-en-v1,chunk500"`.
+
+## Run logging and metadata
+
+Each benchmark run appends a JSON line to:
+
+- `~/.smartfiles/benchmarks/beir/runs.jsonl`
+
+Every entry records key metadata so you can compare runs over time, including:
+
+- Timestamp (UTC)
+- Dataset and split
+- `top_k`, `batch_size`, `skip_index`
+- Embedding configuration:
+   - `SMARTFILES_EMBEDDING_PROFILE` (if set)
+   - `SMARTFILES_EMBEDDING_MODEL` (if set)
+   - The underlying SentenceTransformers `name_or_path` (when available)
+- Installed `smartfiles` package version (if discoverable)
+- The optional `--tag` label
+- Metrics: NDCG, Recall, MAP, Precision at the evaluated K values
+
 ## How it stays isolated
 
 - Uses a separate data root under `SMARTFILES_DATA_DIR/benchmarks/beir`.

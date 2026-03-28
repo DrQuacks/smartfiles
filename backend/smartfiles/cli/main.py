@@ -215,6 +215,11 @@ def debug_scores(
             "--skip-index",
             help="Reuse an existing BEIR index instead of rebuilding it",
         ),
+        run_tag: str = typer.Option(
+            "",
+            "--tag",
+            help="Optional label to attach to this benchmark run",
+        ),
     ):
         """Run a BEIR benchmark using the current SmartFiles stack.
 
@@ -243,6 +248,7 @@ def debug_scores(
             top_k=top_k,
             batch_size=batch_size,
             skip_index=skip_index,
+            run_tag=run_tag or None,
         )
 
 

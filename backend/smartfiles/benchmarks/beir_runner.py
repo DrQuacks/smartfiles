@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -9,7 +10,12 @@ from beir.datasets.data_loader import GenericDataLoader
 from beir.retrieval.evaluation import EvaluateRetrieval
 
 from smartfiles.config import get_data_dir
-from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
+from smartfiles.embeddings.embedding_model import (
+    EmbeddingModel,
+    get_default_embedding_model,
+    PROFILE_ENV_VAR,
+    MODEL_ENV_VAR,
+)
 from smartfiles.database.vector_store import ChromaVectorStore
 from smartfiles.ingestion.chunker import DocumentChunk
 from smartfiles.search.search_engine import run_search
@@ -27,6 +33,12 @@ def _beir_root_dir() -> Path:
 
 def _dataset_dir(dataset_name: str) -> Path:
     return _beir_root_dir() / dataset_name
+
+
+def _runs_log_path() -> Path:
+    """Return the path to the JSONL runs log for BEIR benchmarks."""
+
+    return _beir_root_dir() / "runs.jsonl"
 
 
 def _download_and_load_beir(dataset_name: str, split: str) -> Tuple[Dict, Dict, Dict]:
@@ -120,6 +132,7 @@ def run_beir_benchmark(
     top_k: int = 10,
     batch_size: int = 128,
     skip_index: bool = False,
+    run_tag: str | None = None,
 ) -> None:
     """Run a BEIR benchmark against the current SmartFiles stack.
 
@@ -166,9 +179,7 @@ def run_beir_benchmark(
 
     k_values = sorted({1, 3, 5, 10, max_k})
 
-    ndcg, _map, recall, precision = EvaluateRetrieval.evaluate(
-        qrels, results, k_values=k_values
-    )
+    ndcg, _map, recall, precision = EvaluateRetrieval.evaluate(qrels, results, k_values=k_values)
 
     print(f"BEIR benchmark for dataset='{dataset_name}', split='{split}'")
     print(f"Top-K evaluated: {k_values}")
@@ -197,3 +208,53 @@ def run_beir_benchmark(
             print(f"  @{k}: {val:.4f}")
 
     print("\nDone.")
+
+    # Persist a compact JSONL log entry with key metadata so runs
+    # can be compared over time.
+    try:
+        import json
+        import importlib.metadata
+
+        smartfiles_version = None
+        try:
+            smartfiles_version = importlib.metadata.version("smartfiles")
+        except importlib.metadata.PackageNotFoundError:
+            smartfiles_version = None
+
+        embedding_profile = os.getenv(PROFILE_ENV_VAR)
+        embedding_model_override = os.getenv(MODEL_ENV_VAR)
+        # Best-effort attempt to capture the underlying model id/path.
+        model_name_or_path = getattr(getattr(embedder, "model", None), "name_or_path", None)
+
+        log_entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "dataset": dataset_name,
+            "split": split,
+            "top_k": top_k,
+            "batch_size": batch_size,
+            "skip_index": skip_index,
+            "k_values": k_values,
+            "embedding": {
+                "env_profile": embedding_profile,
+                "env_model": embedding_model_override,
+                "model_name_or_path": model_name_or_path,
+            },
+            "smartfiles_version": smartfiles_version,
+            "run_tag": run_tag,
+            "metrics": {
+                "ndcg": {str(k): ndcg.get(k) for k in k_values if ndcg.get(k) is not None},
+                "map": {str(k): _map.get(k) for k in k_values if _map.get(k) is not None},
+                "recall": {str(k): recall.get(k) for k in k_values if recall.get(k) is not None},
+                "precision": {
+                    str(k): precision.get(k) for k in k_values if precision.get(k) is not None
+                },
+            },
+        }
+
+        runs_path = _runs_log_path()
+        runs_path.parent.mkdir(parents=True, exist_ok=True)
+        with runs_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception:
+        # Logging should never cause the benchmark itself to fail.
+        pass
