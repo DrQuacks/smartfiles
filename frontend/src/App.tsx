@@ -84,7 +84,9 @@ function App() {
     setSearchError(null)
 
     try {
-      const chunksK = Math.min(Math.max(k * 5, k + 5), 100)
+      // Over-fetch chunks so we have enough unique documents after
+      // collapsing multiple hits from the same file.
+      const chunksK = Math.min(Math.max(k * 10, k + 10), 400)
       const params = new URLSearchParams({
         query: trimmed,
         k: chunksK.toString(),
