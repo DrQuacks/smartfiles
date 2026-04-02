@@ -89,3 +89,28 @@ Every entry records key metadata so you can compare runs over time, including:
 
 This lets you experiment with models and pipeline changes on BEIR without
 risking your normal SmartFiles usage.
+
+## Running a small benchmark matrix
+
+For more structured testing, there is a helper script that runs a
+predefined grid of (dataset × embedding profile) benchmarks and relies
+on the same logging (`runs.jsonl`) described above.
+
+From the `backend/` directory, after installing the benchmark extra:
+
+```bash
+cd backend
+source ../.venv/bin/activate
+python scripts/run_beir_matrix.py
+```
+
+By default this script runs a small matrix (configurable in
+`scripts/run_beir_matrix.py`) over:
+
+- Dataset(s): currently `scifact`
+- Embedding profiles: `all-minilm-l6-v2`, `bge-small-en-v1`
+
+You can edit `default_matrix()` in that script to add datasets,
+profiles, or tweak `top_k` / `batch_size`. Each run is tagged (e.g.
+`scifact,all-minilm-l6-v2`) and logged to `runs.jsonl` so you can
+compare results over time.
