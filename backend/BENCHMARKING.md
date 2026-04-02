@@ -114,3 +114,26 @@ You can edit `default_matrix()` in that script to add datasets,
 profiles, or tweak `top_k` / `batch_size`. Each run is tagged (e.g.
 `scifact,all-minilm-l6-v2`) and logged to `runs.jsonl` so you can
 compare results over time.
+
+## Visualizing results in a small dashboard
+
+For a more human-friendly view over time, there is also a simple
+Streamlit dashboard that reads `runs.jsonl` and lets you filter and
+compare runs by dataset, embedding profile, tag, and metric.
+
+From the `backend/` directory, after installing the benchmark extra:
+
+```bash
+cd backend
+source ../.venv/bin/activate
+pip install .[benchmark]
+streamlit run scripts/benchmark_dashboard.py
+```
+
+This opens a local web UI where you can:
+
+- Filter by dataset and embedding profile
+- Optionally filter by run `tag`
+- Choose a metric (`NDCG`, `Recall`, `MAP`, `Precision`) and K
+- See a summary table (mean/std/min/max) per dataset/profile, plus
+   the underlying individual runs
