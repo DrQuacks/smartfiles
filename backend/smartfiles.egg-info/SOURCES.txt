@@ -8,6 +8,8 @@ smartfiles.egg-info/dependency_links.txt
 smartfiles.egg-info/entry_points.txt
 smartfiles.egg-info/requires.txt
 smartfiles.egg-info/top_level.txt
+smartfiles/benchmarks/__init__.py
+smartfiles/benchmarks/beir_runner.py
 smartfiles/cli/__init__.py
 smartfiles/cli/main.py
 smartfiles/database/__init__.py
@@ -22,3 +24,5 @@ smartfiles/ingestion/indexer.py
 smartfiles/ingestion/text_extractor.py
 smartfiles/search/__init__.py
 smartfiles/search/search_engine.py
+smartfiles/server/__init__.py
+smartfiles/server/api.py

@@ -108,7 +108,7 @@ By default this script runs a small matrix (configurable in
 `scripts/run_beir_matrix.py`) over:
 
 - Dataset(s): currently `scifact`
-- Embedding profiles: `all-minilm-l6-v2`, `bge-small-en-v1`
+- Embedding profiles: `all-minilm-l6-v2`, `bge-small-en-v1`, `bge-base-en-v1`
 
 You can edit `default_matrix()` in that script to add datasets,
 profiles, or tweak `top_k` / `batch_size`. Each run is tagged (e.g.

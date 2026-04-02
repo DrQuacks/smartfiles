@@ -15,3 +15,5 @@ Requires-Dist: numpy<2
 Requires-Dist: python-docx
 Requires-Dist: pytest
 Requires-Dist: pytest-cov
+Provides-Extra: benchmark
+Requires-Dist: beir>=1.0.0; extra == "benchmark"

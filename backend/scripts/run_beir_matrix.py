@@ -67,7 +67,7 @@ def default_matrix() -> list[BenchmarkConfig]:
     profiles: Iterable[str | None] = [
         "all-minilm-l6-v2",
         "bge-small-en-v1",
-        # Add "bge-base-en-v1" if you have it installed and want a heavier model.
+        "bge-base-en-v1",
     ]
 
     datasets: Iterable[str] = [

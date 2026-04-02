@@ -11,3 +11,6 @@ numpy<2
 python-docx
 pytest
 pytest-cov
+
+[benchmark]
+beir>=1.0.0
