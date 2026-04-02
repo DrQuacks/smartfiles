@@ -27,13 +27,19 @@ SUPPORTED_MODELS: Dict[str, SupportedEmbeddingModel] = {
     ),
     "bge-small-en-v1": SupportedEmbeddingModel(
         key="bge-small-en-v1",
-        model_id="BAAI/bge-small-en-v1",
-        description="General-purpose English model (768d), good trade-off of speed and quality.",
+        model_id="BAAI/bge-small-en-v1.5",
+        description=(
+            "General-purpose English model (768d), good trade-off of speed and quality. "
+            "Mapped to the current Hugging Face repo 'BAAI/bge-small-en-v1.5'."
+        ),
     ),
     "bge-base-en-v1": SupportedEmbeddingModel(
         key="bge-base-en-v1",
-        model_id="BAAI/bge-base-en-v1",
-        description="Larger English model (1024d) for higher-quality embeddings.",
+        model_id="BAAI/bge-base-en-v1.5",
+        description=(
+            "Larger English model (1024d) for higher-quality embeddings. "
+            "Mapped to the current Hugging Face repo 'BAAI/bge-base-en-v1.5'."
+        ),
     ),
 }
 
