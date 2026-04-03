@@ -167,10 +167,19 @@ def main() -> None:
         st.info("No runs match the current filters.")
         return
 
+    # Focus on runs that actually have this metric recorded.
+    metric_df = filtered.dropna(subset=[metric_col])
+    if metric_df.empty:
+        st.info(
+            f"No runs have recorded {metric.upper()}@{k} yet. "
+            "Try a different metric/K or rerun benchmarks with the current code."
+        )
+        return
+
     # Summary by dataset/profile.
     group_cols = ["dataset", "embedding_profile", "embedding_model"]
     summary = (
-        filtered.groupby(group_cols)[metric_col]
+        metric_df.groupby(group_cols)[metric_col]
         .agg(["count", "mean", "std", "min", "max"])
         .reset_index()
         .sort_values("mean", ascending=False)
@@ -189,7 +198,7 @@ def main() -> None:
         "tag",
         metric_col,
     ]
-    st.dataframe(filtered[display_cols], use_container_width=True)
+    st.dataframe(metric_df[display_cols], use_container_width=True)
 
 
 if __name__ == "__main__":
