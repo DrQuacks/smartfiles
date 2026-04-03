@@ -185,25 +185,25 @@ def run_beir_benchmark(
     print(f"Top-K evaluated: {k_values}")
     print("\nNDCG@K:")
     for k in k_values:
-        val = ndcg.get(k)
+        val = ndcg.get(f"NDCG@{k}")
         if val is not None:
             print(f"  @{k}: {val:.4f}")
 
     print("\nRecall@K:")
     for k in k_values:
-        val = recall.get(k)
+        val = recall.get(f"Recall@{k}")
         if val is not None:
             print(f"  @{k}: {val:.4f}")
 
     print("\nMAP@K:")
     for k in k_values:
-        val = _map.get(k)
+        val = _map.get(f"MAP@{k}")
         if val is not None:
             print(f"  @{k}: {val:.4f}")
 
     print("\nPrecision@K:")
     for k in k_values:
-        val = precision.get(k)
+        val = precision.get(f"P@{k}")
         if val is not None:
             print(f"  @{k}: {val:.4f}")
 
@@ -242,11 +242,25 @@ def run_beir_benchmark(
             "smartfiles_version": smartfiles_version,
             "run_tag": run_tag,
             "metrics": {
-                "ndcg": {str(k): ndcg.get(k) for k in k_values if ndcg.get(k) is not None},
-                "map": {str(k): _map.get(k) for k in k_values if _map.get(k) is not None},
-                "recall": {str(k): recall.get(k) for k in k_values if recall.get(k) is not None},
+                "ndcg": {
+                    str(k): ndcg.get(f"NDCG@{k}")
+                    for k in k_values
+                    if ndcg.get(f"NDCG@{k}") is not None
+                },
+                "map": {
+                    str(k): _map.get(f"MAP@{k}")
+                    for k in k_values
+                    if _map.get(f"MAP@{k}") is not None
+                },
+                "recall": {
+                    str(k): recall.get(f"Recall@{k}")
+                    for k in k_values
+                    if recall.get(f"Recall@{k}") is not None
+                },
                 "precision": {
-                    str(k): precision.get(k) for k in k_values if precision.get(k) is not None
+                    str(k): precision.get(f"P@{k}")
+                    for k in k_values
+                    if precision.get(f"P@{k}") is not None
                 },
             },
         }
