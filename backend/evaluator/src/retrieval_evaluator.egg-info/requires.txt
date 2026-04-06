@@ -1,0 +1,5 @@
+beir>=1.0.0
+tqdm>=4.60.0
+
+[logging]
+pandas>=1.5

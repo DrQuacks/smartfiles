@@ -1,0 +1,29 @@
+Metadata-Version: 2.4
+Name: retrieval-evaluator
+Version: 0.1.0
+Summary: Generic retrieval evaluation harness (BEIR-compatible)
+Author-email: SmartFiles <dev@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/DrQuacks/smartfiles
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: beir>=1.0.0
+Requires-Dist: tqdm>=4.60.0
+Provides-Extra: logging
+Requires-Dist: pandas>=1.5; extra == "logging"
+
+# Retrieval Evaluator (Prototype)
+
+This is a prototype of a generic retrieval evaluation harness, designed to work with BEIR datasets and pluggable backends.
+
+For now, it lives inside the SmartFiles repo, but it is structured so it can be split into a separate project later.
+
+## Layout
+
+- `retrieval_evaluator.core` — core types and evaluator helpers.
+- `retrieval_evaluator.backends` — pluggable retrieval backends (e.g., SmartFiles adapter).
+- `retrieval_evaluator.logging` — run logging utilities.
+
+## Status
+
+This is an early implementation focused on BEIR-style evaluation with a simple backend interface.
