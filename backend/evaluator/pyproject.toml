@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 logging = ["pandas>=1.5"]
+dashboard = ["pandas>=1.5", "streamlit"]
 
 [project.urls]
 Homepage = "https://github.com/DrQuacks/smartfiles"

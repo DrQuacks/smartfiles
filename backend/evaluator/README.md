@@ -9,7 +9,33 @@ For now, it lives inside the SmartFiles repo, but it is structured so it can be 
 - `retrieval_evaluator.core` — core types and evaluator helpers.
 - `retrieval_evaluator.backends` — pluggable retrieval backends (e.g., SmartFiles adapter).
 - `retrieval_evaluator.logging` — run logging utilities.
+- `retrieval_evaluator.dashboard_beir` — small Streamlit dashboard for BEIR runs.
+
+## Usage (BEIR + SmartFiles)
+
+Install the evaluator (from `backend/`):
+
+```bash
+source .venv/bin/activate
+pip install -e evaluator[dashboard]
+```
+
+Run a BEIR benchmark for SmartFiles (example assumes you have a BEIR
+dataset unpacked under `/path/to/scifact`):
+
+```bash
+python -m retrieval_evaluator.cli_smartfiles_beir scifact /path/to/scifact --tag test-run
+```
+
+Launch the dashboard to inspect results:
+
+```bash
+streamlit run evaluator/src/retrieval_evaluator/dashboard_beir.py
+```
+
+Runs are read from `~/.retrieval_evaluator/beir_runs.jsonl` and can be
+filtered by dataset, backend, tag, and metric.
 
 ## Status
 
-This is an early implementation focused on BEIR-style evaluation with a simple backend interface.
+This is an early implementation focused on BEIR-style evaluation with a simple backend interface and basic dashboard.
