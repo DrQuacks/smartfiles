@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import os
+
 import pandas as pd
 import streamlit as st
 
@@ -26,6 +28,11 @@ from retrieval_evaluator.core.beir_evaluator import evaluate_beir_run
 from retrieval_evaluator.core.models import RunConfig
 from retrieval_evaluator.datasets.beir import BeirDataset
 from retrieval_evaluator.logging.jsonl_logger import JsonlRunLogger
+from smartfiles.embeddings.embedding_model import (
+    PROFILE_ENV_VAR,
+    MODEL_ENV_VAR,
+    list_supported_models,
+)
 
 
 DEFAULT_RUNS_PATH = Path.home() / ".retrieval_evaluator" / "beir_runs.jsonl"
@@ -55,6 +62,20 @@ class RunRecord:
     def backend_name(self) -> str:
         cfg = self.raw.get("config") or {}
         return str(cfg.get("backend_name", ""))
+
+    @property
+    def embedding_profile(self) -> Optional[str]:
+        cfg = self.raw.get("config") or {}
+        extra = cfg.get("extra_params") or {}
+        val = extra.get("embedding_profile")
+        return str(val) if val is not None else None
+
+    @property
+    def embedding_model_override(self) -> Optional[str]:
+        cfg = self.raw.get("config") or {}
+        extra = cfg.get("extra_params") or {}
+        val = extra.get("embedding_model_override")
+        return str(val) if val is not None else None
 
     @property
     def timestamp(self) -> str:
@@ -104,6 +125,8 @@ def to_dataframe(records: List[RunRecord]) -> pd.DataFrame:
             "split": r.split,
             "tag": r.tag,
             "backend_name": r.backend_name,
+            "embedding_profile": r.embedding_profile,
+            "embedding_model": r.embedding_model_override,
             "timestamp": r.timestamp,
         }
         for metric in ("ndcg", "recall", "map", "precision"):
@@ -138,37 +161,77 @@ def main() -> None:
         batch_size = st.number_input("Batch size", min_value=1, max_value=2048, value=128, step=1, key="batch_size")
         tag = st.text_input("Tag (optional)", value="", key="run_tag")
 
-        if st.button("Run benchmark", key="run_benchmark"):
+        st.markdown("**Embedding models**")
+        supported = list_supported_models()
+        profile_keys = [m.key for m in supported]
+        profile_labels = {m.key: f"{m.key} — {m.description}" for m in supported}
+        current_profile = os.getenv(PROFILE_ENV_VAR, profile_keys[0] if profile_keys else "")
+        default_profiles = [current_profile] if current_profile in profile_keys else profile_keys
+        selected_profiles = st.multiselect(
+            "Profiles (SMARTFILES_EMBEDDING_PROFILE)",
+            options=profile_keys,
+            default=default_profiles,
+            format_func=lambda k: profile_labels.get(k, k),
+            key="embedding_profiles",
+        )
+
+        custom_model = st.text_input(
+            "Override model id/path (SMARTFILES_EMBEDDING_MODEL)",
+            value=os.getenv(MODEL_ENV_VAR, ""),
+            help="Optional: Hugging Face model id or local SentenceTransformers path. Takes precedence over profile.",
+            key="embedding_model_override",
+        )
+
+        if st.button("Run benchmark(s)", key="run_benchmark"):
             data_path = Path(dataset_dir).expanduser()
             if not data_path.exists() or not data_path.is_dir():
                 st.error("Dataset directory does not exist or is not a directory.")
+            elif not selected_profiles:
+                st.error("Please select at least one embedding profile to run.")
             else:
-                with st.spinner("Running BEIR evaluation with SmartFiles backend..."):
+                with st.spinner("Running BEIR evaluation(s) with SmartFiles backend..."):
                     dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
                     corpus, queries, qrels = dataset.load(split=split)
 
-                    backend = SmartFilesBackend()
-                    config = RunConfig(
-                        dataset=dataset_name,
-                        split=split,
-                        top_k=int(top_k),
-                        batch_size=int(batch_size),
-                        backend_name=backend.name,
-                        tag=tag or None,
-                    )
+                    results_to_log = []
 
-                    result = evaluate_beir_run(
-                        backend=backend,
-                        corpus=corpus,
-                        queries=queries,
-                        qrels=qrels,
-                        config=config,
-                    )
+                    for profile_choice in selected_profiles:
+                        # Configure embedding model environment for this run.
+                        os.environ[PROFILE_ENV_VAR] = profile_choice
+                        if custom_model.strip():
+                            os.environ[MODEL_ENV_VAR] = custom_model.strip()
+                        elif MODEL_ENV_VAR in os.environ:
+                            os.environ.pop(MODEL_ENV_VAR)
 
-                    logger = JsonlRunLogger(runs_path)
-                    logger.append([result])
+                        backend = SmartFilesBackend()
+                        config = RunConfig(
+                            dataset=dataset_name,
+                            split=split,
+                            top_k=int(top_k),
+                            batch_size=int(batch_size),
+                            backend_name=backend.name,
+                            tag=tag or None,
+                            extra_params={
+                                "embedding_profile": profile_choice,
+                                "embedding_model_override": custom_model.strip() or None,
+                            },
+                        )
 
-                st.success("Benchmark run completed and logged.")
+                        result = evaluate_beir_run(
+                            backend=backend,
+                            corpus=corpus,
+                            queries=queries,
+                            qrels=qrels,
+                            config=config,
+                        )
+
+                        results_to_log.append(result)
+
+                    if results_to_log:
+                        logger = JsonlRunLogger(runs_path)
+                        logger.append(results_to_log)
+
+                st.success(f"Completed and logged {len(selected_profiles)} benchmark run(s).")
 
     records = load_runs(runs_path)
     if not records:
@@ -185,6 +248,9 @@ def main() -> None:
         datasets = sorted(df["dataset"].dropna().unique().tolist())
         dataset_sel = st.multiselect("Dataset", datasets, default=datasets)
 
+        profiles = sorted([p for p in df["embedding_profile"].dropna().unique().tolist() if p])
+        profile_sel = st.multiselect("Embedding profile", profiles, default=profiles)
+
         backends = sorted(df["backend_name"].dropna().unique().tolist())
         backend_sel = st.multiselect("Backend", backends, default=backends)
 
@@ -197,6 +263,8 @@ def main() -> None:
     filtered = df.copy()
     if dataset_sel:
         filtered = filtered[filtered["dataset"].isin(dataset_sel)]
+    if profile_sel:
+        filtered = filtered[filtered["embedding_profile"].isin(profile_sel)]
     if backend_sel:
         filtered = filtered[filtered["backend_name"].isin(backend_sel)]
     if tag_sel:
@@ -217,7 +285,7 @@ def main() -> None:
         )
         return
 
-    group_cols = ["dataset", "backend_name"]
+    group_cols = ["dataset", "embedding_profile", "backend_name"]
     summary = (
         metric_df.groupby(group_cols)[metric_col]
         .agg(["count", "mean", "std", "min", "max"])
@@ -232,6 +300,8 @@ def main() -> None:
     display_cols = [
         "dataset",
         "split",
+        "embedding_profile",
+        "embedding_model",
         "backend_name",
         "tag",
         "timestamp",
