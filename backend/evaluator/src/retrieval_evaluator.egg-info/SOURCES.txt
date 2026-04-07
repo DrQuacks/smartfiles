@@ -3,6 +3,7 @@ pyproject.toml
 src/retrieval_evaluator/__init__.py
 src/retrieval_evaluator/cli_beir.py
 src/retrieval_evaluator/cli_smartfiles_beir.py
+src/retrieval_evaluator/dashboard_beir.py
 src/retrieval_evaluator.egg-info/PKG-INFO
 src/retrieval_evaluator.egg-info/SOURCES.txt
 src/retrieval_evaluator.egg-info/dependency_links.txt

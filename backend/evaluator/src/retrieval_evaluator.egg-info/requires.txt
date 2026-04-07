@@ -1,5 +1,9 @@
 beir>=1.0.0
 tqdm>=4.60.0
 
+[dashboard]
+pandas>=1.5
+streamlit
+
 [logging]
 pandas>=1.5

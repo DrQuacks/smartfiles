@@ -21,6 +21,12 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import streamlit as st
 
+from retrieval_evaluator.backends.smartfiles_backend import SmartFilesBackend
+from retrieval_evaluator.core.beir_evaluator import evaluate_beir_run
+from retrieval_evaluator.core.models import RunConfig
+from retrieval_evaluator.datasets.beir import BeirDataset
+from retrieval_evaluator.logging.jsonl_logger import JsonlRunLogger
+
 
 DEFAULT_RUNS_PATH = Path.home() / ".retrieval_evaluator" / "beir_runs.jsonl"
 
@@ -118,6 +124,51 @@ def main() -> None:
 
     runs_path = DEFAULT_RUNS_PATH
     st.caption(f"Reading runs from: {runs_path}")
+
+    with st.expander("Run new BEIR benchmark", expanded=False):
+        dataset_name = st.text_input("Dataset name", value="scifact", key="dataset_name")
+        dataset_dir = st.text_input(
+            "Dataset directory",
+            value="",
+            help="Path to the BEIR dataset folder (containing corpus.jsonl, queries.jsonl, qrels/)",
+            key="dataset_dir",
+        )
+        split = st.text_input("Split", value="test", key="split")
+        top_k = st.number_input("Top K", min_value=1, max_value=1000, value=10, step=1, key="top_k")
+        batch_size = st.number_input("Batch size", min_value=1, max_value=2048, value=128, step=1, key="batch_size")
+        tag = st.text_input("Tag (optional)", value="", key="run_tag")
+
+        if st.button("Run benchmark", key="run_benchmark"):
+            data_path = Path(dataset_dir).expanduser()
+            if not data_path.exists() or not data_path.is_dir():
+                st.error("Dataset directory does not exist or is not a directory.")
+            else:
+                with st.spinner("Running BEIR evaluation with SmartFiles backend..."):
+                    dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
+                    corpus, queries, qrels = dataset.load(split=split)
+
+                    backend = SmartFilesBackend()
+                    config = RunConfig(
+                        dataset=dataset_name,
+                        split=split,
+                        top_k=int(top_k),
+                        batch_size=int(batch_size),
+                        backend_name=backend.name,
+                        tag=tag or None,
+                    )
+
+                    result = evaluate_beir_run(
+                        backend=backend,
+                        corpus=corpus,
+                        queries=queries,
+                        qrels=qrels,
+                        config=config,
+                    )
+
+                    logger = JsonlRunLogger(runs_path)
+                    logger.append([result])
+
+                st.success("Benchmark run completed and logged.")
 
     records = load_runs(runs_path)
     if not records:
