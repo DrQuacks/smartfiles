@@ -148,6 +148,9 @@ def main() -> None:
     runs_path = DEFAULT_RUNS_PATH
     st.caption(f"Reading runs from: {runs_path}")
 
+    if "is_running_benchmark" not in st.session_state:
+        st.session_state["is_running_benchmark"] = False
+
     with st.expander("Run new BEIR benchmark", expanded=False):
         dataset_name = st.text_input("Dataset name", value="scifact", key="dataset_name")
         dataset_dir = st.text_input(
@@ -182,56 +185,66 @@ def main() -> None:
             key="embedding_model_override",
         )
 
-        if st.button("Run benchmark(s)", key="run_benchmark"):
+        run_clicked = st.button(
+            "Run benchmark(s)",
+            key="run_benchmark",
+            disabled=st.session_state.get("is_running_benchmark", False),
+        )
+
+        if run_clicked and not st.session_state.get("is_running_benchmark", False):
             data_path = Path(dataset_dir).expanduser()
             if not data_path.exists() or not data_path.is_dir():
                 st.error("Dataset directory does not exist or is not a directory.")
             elif not selected_profiles:
                 st.error("Please select at least one embedding profile to run.")
             else:
-                with st.spinner("Running BEIR evaluation(s) with SmartFiles backend..."):
-                    dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
-                    corpus, queries, qrels = dataset.load(split=split)
+                st.session_state["is_running_benchmark"] = True
+                try:
+                    with st.spinner("Running BEIR evaluation(s) with SmartFiles backend..."):
+                        dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
+                        corpus, queries, qrels = dataset.load(split=split)
 
-                    results_to_log = []
+                        results_to_log = []
 
-                    for profile_choice in selected_profiles:
-                        # Configure embedding model environment for this run.
-                        os.environ[PROFILE_ENV_VAR] = profile_choice
-                        if custom_model.strip():
-                            os.environ[MODEL_ENV_VAR] = custom_model.strip()
-                        elif MODEL_ENV_VAR in os.environ:
-                            os.environ.pop(MODEL_ENV_VAR)
+                        for profile_choice in selected_profiles:
+                            # Configure embedding model environment for this run.
+                            os.environ[PROFILE_ENV_VAR] = profile_choice
+                            if custom_model.strip():
+                                os.environ[MODEL_ENV_VAR] = custom_model.strip()
+                            elif MODEL_ENV_VAR in os.environ:
+                                os.environ.pop(MODEL_ENV_VAR)
 
-                        backend = SmartFilesBackend()
-                        config = RunConfig(
-                            dataset=dataset_name,
-                            split=split,
-                            top_k=int(top_k),
-                            batch_size=int(batch_size),
-                            backend_name=backend.name,
-                            tag=tag or None,
-                            extra_params={
-                                "embedding_profile": profile_choice,
-                                "embedding_model_override": custom_model.strip() or None,
-                            },
-                        )
+                            backend = SmartFilesBackend()
+                            config = RunConfig(
+                                dataset=dataset_name,
+                                split=split,
+                                top_k=int(top_k),
+                                batch_size=int(batch_size),
+                                backend_name=backend.name,
+                                tag=tag or None,
+                                extra_params={
+                                    "embedding_profile": profile_choice,
+                                    "embedding_model_override": custom_model.strip() or None,
+                                },
+                            )
 
-                        result = evaluate_beir_run(
-                            backend=backend,
-                            corpus=corpus,
-                            queries=queries,
-                            qrels=qrels,
-                            config=config,
-                        )
+                            result = evaluate_beir_run(
+                                backend=backend,
+                                corpus=corpus,
+                                queries=queries,
+                                qrels=qrels,
+                                config=config,
+                            )
 
-                        results_to_log.append(result)
+                            results_to_log.append(result)
 
-                    if results_to_log:
-                        logger = JsonlRunLogger(runs_path)
-                        logger.append(results_to_log)
+                        if results_to_log:
+                            logger = JsonlRunLogger(runs_path)
+                            logger.append(results_to_log)
 
-                st.success(f"Completed and logged {len(selected_profiles)} benchmark run(s).")
+                    st.success(f"Completed and logged {len(selected_profiles)} benchmark run(s).")
+                finally:
+                    st.session_state["is_running_benchmark"] = False
 
     records = load_runs(runs_path)
     if not records:
