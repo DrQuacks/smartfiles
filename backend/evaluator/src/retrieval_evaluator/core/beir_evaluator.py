@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Dict, Mapping, Sequence
+from datetime import datetime, timezone
 
 from beir.retrieval.evaluation import EvaluateRetrieval
 
@@ -52,4 +53,11 @@ def evaluate_beir_run(
 
     backend_metadata = {"backend_name": backend.name}
 
-    return RunResult(config=config, metrics=metrics, backend_metadata=backend_metadata)
+    ts = datetime.now(timezone.utc).isoformat()
+
+    return RunResult(
+        config=config,
+        timestamp=ts,
+        metrics=metrics,
+        backend_metadata=backend_metadata,
+    )

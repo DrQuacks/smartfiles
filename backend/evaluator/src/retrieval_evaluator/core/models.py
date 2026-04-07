@@ -30,6 +30,7 @@ class RunResult:
     """Result of a benchmark run, including metrics and metadata."""
 
     config: RunConfig
+    timestamp: str
     metrics: Dict[str, Dict[str, float]]
     # e.g. {"ndcg": {"1": 0.6, "3": 0.7}, ...}
     backend_metadata: Dict[str, Any] = field(default_factory=dict)

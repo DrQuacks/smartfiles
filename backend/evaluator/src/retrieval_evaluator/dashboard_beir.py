@@ -52,8 +52,11 @@ class RunRecord:
 
     @property
     def timestamp(self) -> str:
-        # No explicit timestamp in RunResult yet; fall back to none or
-        # a value from backend_metadata if you add one later.
+        # Prefer the top-level timestamp on RunResult; fall back to any
+        # timestamp placed in backend_metadata for older runs.
+        top_level = self.raw.get("timestamp")
+        if top_level is not None:
+            return str(top_level)
         meta = self.raw.get("backend_metadata") or {}
         val = meta.get("timestamp")
         return str(val) if val is not None else ""
