@@ -206,7 +206,15 @@ def main() -> None:
 
                         results_to_log = []
 
-                        for profile_choice in selected_profiles:
+                        total_profiles = len(selected_profiles)
+                        status_placeholder = st.empty()
+                        progress_bar = st.progress(0.0)
+
+                        for idx, profile_choice in enumerate(selected_profiles, start=1):
+                            status_placeholder.write(
+                                f"Running profile {profile_choice} ({idx}/{total_profiles})..."
+                            )
+
                             # Configure embedding model environment for this run.
                             os.environ[PROFILE_ENV_VAR] = profile_choice
                             if custom_model.strip():
@@ -237,6 +245,12 @@ def main() -> None:
                             )
 
                             results_to_log.append(result)
+
+                            progress_bar.progress(idx / total_profiles)
+
+                        status_placeholder.write(
+                            f"Completed {len(results_to_log)} run(s) across {total_profiles} profile(s)."
+                        )
 
                         if results_to_log:
                             logger = JsonlRunLogger(runs_path)
