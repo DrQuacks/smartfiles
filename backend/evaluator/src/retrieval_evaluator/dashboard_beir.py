@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import os
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -309,7 +310,15 @@ def main() -> None:
         tags = sorted([t for t in df["tag"].dropna().unique().tolist() if t])
         tag_sel = st.multiselect("Tag (optional)", tags, default=tags)
 
-        metric = st.selectbox("Metric", ["ndcg", "recall", "map", "precision"], index=0)
+        metric_options = ["ndcg", "recall", "map", "precision"]
+        metric = st.selectbox("Metric", metric_options, index=0)
+        metric_help = {
+            "ndcg": "NDCG@K ∈ [0,1]: higher is better; measures ranking quality with more weight on top-ranked relevant docs.",
+            "recall": "Recall@K ∈ [0,1]: higher is better; fraction of all relevant docs retrieved in top-K.",
+            "map": "MAP@K ∈ [0,1]: higher is better; average precision across ranks and queries.",
+            "precision": "Precision@K ∈ [0,1]: higher is better; fraction of top-K results that are relevant.",
+        }
+        st.caption(metric_help.get(metric, ""))
         k = st.selectbox("K", [1, 3, 5, 10], index=3)
 
     filtered = df.copy()
@@ -361,6 +370,47 @@ def main() -> None:
         metric_col,
     ]
     st.dataframe(metric_df[display_cols], use_container_width=True)
+
+    st.markdown("### Visualization")
+    st.caption("Pick any columns for X and Y to explore trade-offs (e.g. duration vs NDCG@10).")
+
+    if not metric_df.empty:
+        numeric_cols = sorted(metric_df.select_dtypes(include=["number"]).columns.tolist())
+        all_cols = metric_df.columns.tolist()
+
+        if not numeric_cols:
+            st.info("No numeric columns available for plotting.")
+        else:
+            default_x = "duration_seconds" if "duration_seconds" in numeric_cols else numeric_cols[0]
+            default_y = metric_col if metric_col in numeric_cols else numeric_cols[0]
+
+            x_axis = st.selectbox("X axis", all_cols, index=all_cols.index(default_x) if default_x in all_cols else 0)
+            y_axis = st.selectbox("Y axis", numeric_cols, index=numeric_cols.index(default_y) if default_y in numeric_cols else 0)
+
+            x_is_numeric = x_axis in numeric_cols
+
+            chart = (
+                alt.Chart(metric_df)
+                .mark_circle(size=80, opacity=0.8)
+                .encode(
+                    x=alt.X(x_axis, type="quantitative" if x_is_numeric else "nominal"),
+                    y=alt.Y(y_axis, type="quantitative"),
+                    color=alt.Color("embedding_profile:N", title="Profile"),
+                    tooltip=[
+                        "dataset",
+                        "embedding_profile",
+                        "embedding_model",
+                        "backend_name",
+                        "tag",
+                        "timestamp",
+                        "duration",
+                        y_axis,
+                    ],
+                )
+                .interactive()
+            )
+
+            st.altair_chart(chart, use_container_width=True)
 
 
 if __name__ == "__main__":  # pragma: no cover
