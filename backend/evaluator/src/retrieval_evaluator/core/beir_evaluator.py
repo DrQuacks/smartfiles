@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Mapping, Sequence
 from datetime import datetime, timezone
+import time
 
 from beir.retrieval.evaluation import EvaluateRetrieval
 
@@ -33,6 +34,7 @@ def evaluate_beir_run(
     k_values: Sequence[int] = (1, 3, 5, 10),
 ) -> RunResult:
     """Index corpus on the backend and evaluate using BEIR metrics."""
+    start = time.perf_counter()
 
     backend.index_corpus(corpus)
     results = _build_results_dict(backend, queries, top_k=config.top_k)
@@ -54,10 +56,12 @@ def evaluate_beir_run(
     backend_metadata = {"backend_name": backend.name}
 
     ts = datetime.now(timezone.utc).isoformat()
+    duration = time.perf_counter() - start
 
     return RunResult(
         config=config,
         timestamp=ts,
+        duration_seconds=duration,
         metrics=metrics,
         backend_metadata=backend_metadata,
     )

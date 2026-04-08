@@ -88,6 +88,29 @@ class RunRecord:
         val = meta.get("timestamp")
         return str(val) if val is not None else ""
 
+    @property
+    def duration_seconds(self) -> Optional[float]:
+        val = self.raw.get("duration_seconds")
+        try:
+            return float(val) if val is not None else None
+        except Exception:
+            return None
+
+    @property
+    def duration_hms(self) -> Optional[str]:
+        """Return duration as H:MM:SS.mmm or None if missing."""
+
+        total = self.duration_seconds
+        if total is None:
+            return None
+        if total < 0:
+            return None
+        millis = int(round(total * 1000))
+        seconds, ms = divmod(millis, 1000)
+        minutes, sec = divmod(seconds, 60)
+        hours, min_ = divmod(minutes, 60)
+        return f"{hours:d}:{min_:02d}:{sec:02d}.{ms:03d}"
+
     def metric_at(self, metric: str, k: int) -> Optional[float]:
         metrics = self.raw.get("metrics") or {}
         bucket = metrics.get(metric) or {}
@@ -128,6 +151,8 @@ def to_dataframe(records: List[RunRecord]) -> pd.DataFrame:
             "embedding_profile": r.embedding_profile,
             "embedding_model": r.embedding_model_override,
             "timestamp": r.timestamp,
+            "duration_seconds": r.duration_seconds,
+            "duration": r.duration_hms,
         }
         for metric in ("ndcg", "recall", "map", "precision"):
             for k in (1, 3, 5, 10):
@@ -332,6 +357,7 @@ def main() -> None:
         "backend_name",
         "tag",
         "timestamp",
+        "duration",
         metric_col,
     ]
     st.dataframe(metric_df[display_cols], use_container_width=True)

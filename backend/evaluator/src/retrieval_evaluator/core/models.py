@@ -31,6 +31,7 @@ class RunResult:
 
     config: RunConfig
     timestamp: str
+    duration_seconds: float
     metrics: Dict[str, Dict[str, float]]
     # e.g. {"ndcg": {"1": 0.6, "3": 0.7}, ...}
     backend_metadata: Dict[str, Any] = field(default_factory=dict)
