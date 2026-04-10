@@ -230,11 +230,12 @@ def main() -> None:
                         dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
                         corpus, queries, qrels = dataset.load(split=split)
 
-                        results_to_log = []
-
                         total_profiles = len(selected_profiles)
                         status_placeholder = st.empty()
                         progress_bar = st.progress(0.0)
+                        logger = JsonlRunLogger(runs_path)
+
+                        successful = 0
 
                         for idx, profile_choice in enumerate(selected_profiles, start=1):
                             status_placeholder.write(
@@ -248,41 +249,51 @@ def main() -> None:
                             elif MODEL_ENV_VAR in os.environ:
                                 os.environ.pop(MODEL_ENV_VAR)
 
-                            backend = SmartFilesBackend()
-                            config = RunConfig(
-                                dataset=dataset_name,
-                                split=split,
-                                top_k=int(top_k),
-                                batch_size=int(batch_size),
-                                backend_name=backend.name,
-                                tag=tag or None,
-                                extra_params={
-                                    "embedding_profile": profile_choice,
-                                    "embedding_model_override": custom_model.strip() or None,
-                                },
-                            )
+                            try:
+                                backend = SmartFilesBackend()
+                                config = RunConfig(
+                                    dataset=dataset_name,
+                                    split=split,
+                                    top_k=int(top_k),
+                                    batch_size=int(batch_size),
+                                    backend_name=backend.name,
+                                    tag=tag or None,
+                                    extra_params={
+                                        "embedding_profile": profile_choice,
+                                        "embedding_model_override": custom_model.strip() or None,
+                                    },
+                                )
 
-                            result = evaluate_beir_run(
-                                backend=backend,
-                                corpus=corpus,
-                                queries=queries,
-                                qrels=qrels,
-                                config=config,
-                            )
+                                result = evaluate_beir_run(
+                                    backend=backend,
+                                    corpus=corpus,
+                                    queries=queries,
+                                    qrels=qrels,
+                                    config=config,
+                                )
 
-                            results_to_log.append(result)
+                                # Log each successful run immediately so partial
+                                # successes are preserved even if a later profile fails.
+                                logger.append([result])
+                                successful += 1
+                            except Exception as exc:  # noqa: BLE001
+                                st.error(
+                                    f"Error while running profile '{profile_choice}': {exc}"
+                                )
 
                             progress_bar.progress(idx / total_profiles)
 
                         status_placeholder.write(
-                            f"Completed {len(results_to_log)} run(s) across {total_profiles} profile(s)."
+                            f"Completed {successful} successful run(s) out of {total_profiles} profile(s)."
                         )
 
-                        if results_to_log:
-                            logger = JsonlRunLogger(runs_path)
-                            logger.append(results_to_log)
-
-                    st.success(f"Completed and logged {len(selected_profiles)} benchmark run(s).")
+                    if successful:
+                        st.success(
+                            f"Completed and logged {successful} benchmark run(s). "
+                            "Check above for any profiles that failed."
+                        )
+                    else:
+                        st.error("All selected profiles failed. See errors above for details.")
                 finally:
                     st.session_state["is_running_benchmark"] = False
 
