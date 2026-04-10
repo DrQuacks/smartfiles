@@ -41,6 +41,42 @@ SUPPORTED_MODELS: Dict[str, SupportedEmbeddingModel] = {
             "Mapped to the current Hugging Face repo 'BAAI/bge-base-en-v1.5'."
         ),
     ),
+    "bge-large-en-v1": SupportedEmbeddingModel(
+        key="bge-large-en-v1",
+        model_id="BAAI/bge-large-en-v1.5",
+        description=(
+            "Largest BGE English model (1024d), best quality but slowest. "
+            "Mapped to 'BAAI/bge-large-en-v1.5'."
+        ),
+    ),
+    "e5-small-v2": SupportedEmbeddingModel(
+        key="e5-small-v2",
+        model_id="intfloat/e5-small-v2",
+        description=(
+            "E5 small v2 (384d); optimized for retrieval, faster and lighter than base models."
+        ),
+    ),
+    "e5-base-v2": SupportedEmbeddingModel(
+        key="e5-base-v2",
+        model_id="intfloat/e5-base-v2",
+        description=(
+            "E5 base v2 (768d); strong general-purpose retrieval model with good quality/speed trade-off."
+        ),
+    ),
+    "gte-small": SupportedEmbeddingModel(
+        key="gte-small",
+        model_id="thenlper/gte-small",
+        description=(
+            "GTE small (384d); competitive small model for semantic search and retrieval."
+        ),
+    ),
+    "gte-base": SupportedEmbeddingModel(
+        key="gte-base",
+        model_id="thenlper/gte-base",
+        description=(
+            "GTE base (768d); higher-capacity variant for better quality at moderate cost."
+        ),
+    ),
 }
 
 
