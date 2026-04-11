@@ -7,7 +7,7 @@ from typing import Dict, List
 from sentence_transformers import SentenceTransformer
 
 
-DEFAULT_MODEL_KEY = "all-minilm-l6-v2"
+DEFAULT_MODEL_KEY = "gte-base"
 MODEL_ENV_VAR = "SMARTFILES_EMBEDDING_MODEL"
 PROFILE_ENV_VAR = "SMARTFILES_EMBEDDING_PROFILE"
 
@@ -99,7 +99,7 @@ def _resolve_model_id() -> str:
 
     1. `SMARTFILES_EMBEDDING_MODEL` – explicit model id or local path.
     2. `SMARTFILES_EMBEDDING_PROFILE` – key in SUPPORTED_MODELS.
-    3. Default profile `bge-small-en-v1`.
+    3. Default profile `gte-base`.
     """
 
     direct = os.getenv(MODEL_ENV_VAR)
@@ -116,28 +116,28 @@ def _resolve_model_id() -> str:
 
 
 def get_default_embedding_model() -> EmbeddingModel:
-    """Return the default embedding model.
+        """Return the default embedding model.
 
-    By default this uses the `all-minilm-l6-v2` profile, which
-    corresponds to the Hugging Face model
-    `sentence-transformers/all-MiniLM-L6-v2`.
+        By default this uses the `gte-base` profile, which corresponds to
+        the Hugging Face model `thenlper/gte-base`.
 
-    You can override this in two ways:
+        You can override this in two ways:
 
-    - Set `SMARTFILES_EMBEDDING_PROFILE` to one of the known keys in
-      `SUPPORTED_MODELS` (e.g. `bge-base-en-v1`, `all-minilm-l6-v2`).
-    - Set `SMARTFILES_EMBEDDING_MODEL` to either a Hugging Face model
-      id or a local filesystem path to a SentenceTransformers model
-      directory. This takes precedence over the profile.
+        - Set `SMARTFILES_EMBEDDING_PROFILE` to one of the known keys in
+            `SUPPORTED_MODELS` (e.g. `gte-small`, `bge-base-en-v1`,
+            `all-minilm-l6-v2`).
+        - Set `SMARTFILES_EMBEDDING_MODEL` to either a Hugging Face model
+            id or a local filesystem path to a SentenceTransformers model
+            directory. This takes precedence over the profile.
 
-    This keeps the call site abstract (only `embed_texts` is used) and
-    makes it easy to experiment with different local open-source
-    models by swapping env vars, without changing application code.
-    """
+        This keeps the call site abstract (only `embed_texts` is used) and
+        makes it easy to experiment with different local open-source
+        models by swapping env vars, without changing application code.
+        """
 
-    model_id = _resolve_model_id()
-    model = SentenceTransformer(model_id)
-    return EmbeddingModel(model=model)
+        model_id = _resolve_model_id()
+        model = SentenceTransformer(model_id)
+        return EmbeddingModel(model=model)
 
 
 def list_supported_models() -> List[SupportedEmbeddingModel]:
