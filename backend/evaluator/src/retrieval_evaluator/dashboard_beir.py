@@ -91,6 +91,8 @@ class RunRecord:
 
     @property
     def duration_seconds(self) -> Optional[float]:
+        # Older runs may not have a duration recorded; in that case,
+        # leave this as None so the UI can render it as blank.
         val = self.raw.get("duration_seconds")
         try:
             return float(val) if val is not None else None
@@ -152,8 +154,10 @@ def to_dataframe(records: List[RunRecord]) -> pd.DataFrame:
             "embedding_profile": r.embedding_profile,
             "embedding_model": r.embedding_model_override,
             "timestamp": r.timestamp,
-            "duration_seconds": r.duration_seconds,
-            "duration": r.duration_hms,
+            # For legacy runs without duration, use NaN/empty string so
+            # the table doesn't show a literal "None".
+            "duration_seconds": r.duration_seconds if r.duration_seconds is not None else float("nan"),
+            "duration": r.duration_hms or "",
         }
         for metric in ("ndcg", "recall", "map", "precision"):
             for k in (1, 3, 5, 10):
