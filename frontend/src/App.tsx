@@ -111,6 +111,50 @@ function App() {
     }
   }
 
+    const handleReindexFolder = async (folderPath: string) => {
+      const trimmed = folderPath.trim()
+      if (!trimmed) {
+        setIndexError('Folder path is missing for this entry')
+        setIndexStatus(null)
+        return
+      }
+
+      setIsIndexing(true)
+      setIndexError(null)
+      setIndexStatus(null)
+      setIndexPath(trimmed)
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/index`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ root_folder: trimmed, recreate: true }),
+        })
+        if (!res.ok) {
+          throw new Error(`Re-indexing failed: ${res.status}`)
+        }
+
+        setIndexStatus('Re-indexing completed successfully')
+
+        try {
+          const foldersRes = await fetch(`${API_BASE_URL}/folders`)
+          if (foldersRes.ok) {
+            const data: Folder[] = await foldersRes.json()
+            setFolders(data)
+          }
+        } catch (error) {
+          console.error(error)
+        }
+      } catch (error) {
+        console.error(error)
+        setIndexError('Re-indexing request failed')
+      } finally {
+        setIsIndexing(false)
+      }
+    }
+
   const handleIndexFolder = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmed = indexPath.trim()
@@ -239,6 +283,7 @@ function App() {
             indexStatus={indexStatus}
             onIndexPathChange={setIndexPath}
             onIndexFolderSubmit={handleIndexFolder}
+            onReindexFolder={handleReindexFolder}
             onDeleteFolder={handleDeleteFolder}
             onReorderFolders={handleReorderFolders}
           />

@@ -12,6 +12,7 @@ export type ManageFoldersPanelProps = {
   indexStatus: string | null
   onIndexPathChange: (value: string) => void
   onIndexFolderSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onReindexFolder: (folderPath: string) => void
   onDeleteFolder: (folderName: string) => void
   onReorderFolders: (orderedFolderNames: string[]) => void
 }
@@ -25,6 +26,7 @@ export default function ManageFoldersPanel({
   indexStatus,
   onIndexPathChange,
   onIndexFolderSubmit,
+  onReindexFolder,
   onDeleteFolder,
   onReorderFolders,
 }: ManageFoldersPanelProps) {
@@ -109,6 +111,14 @@ export default function ManageFoldersPanel({
                     <div className="folder-item-header">
                       <span className="folder-name">{folder.folder_name}</span>
                       <div className="folder-actions">
+                        <button
+                          type="button"
+                          className="text-button text-button-primary"
+                          onClick={() => onReindexFolder(folder.path)}
+                          disabled={isIndexing}
+                        >
+                          Re-index
+                        </button>
                         <button
                           type="button"
                           className="icon-button"
