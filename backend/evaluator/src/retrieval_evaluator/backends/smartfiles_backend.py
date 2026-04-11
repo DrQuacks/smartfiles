@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Mapping, List
+import os
 
 from smartfiles.config import get_data_dir
 from smartfiles.database.vector_store import ChromaVectorStore
-from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
+from smartfiles.embeddings.embedding_model import (
+    EmbeddingModel,
+    get_default_embedding_model,
+    PROFILE_ENV_VAR,
+    MODEL_ENV_VAR,
+)
 from smartfiles.ingestion.chunker import DocumentChunk
 from smartfiles.search.search_engine import run_search
 
@@ -26,6 +32,12 @@ class SmartFilesBackend(RetrievalBackend):
         self._batch_size = batch_size
         self._store: ChromaVectorStore | None = None
         self._embedder: EmbeddingModel | None = None
+        # Capture embedding-related environment so runs always carry
+        # basic configuration metadata, even when invoked via the CLI.
+        self.metadata = {
+            "embedding_profile": os.getenv(PROFILE_ENV_VAR) or None,
+            "embedding_model_override": os.getenv(MODEL_ENV_VAR) or None,
+        }
 
     @property
     def name(self) -> str:

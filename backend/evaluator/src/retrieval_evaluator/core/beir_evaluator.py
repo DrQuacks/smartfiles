@@ -54,6 +54,11 @@ def evaluate_beir_run(
     }
 
     backend_metadata = {"backend_name": backend.name}
+    # Allow backends to attach additional metadata (e.g. embedding
+    # configuration) via an optional `metadata` dict attribute.
+    extra_meta = getattr(backend, "metadata", None)
+    if isinstance(extra_meta, dict):
+        backend_metadata.update(extra_meta)
 
     ts = datetime.now(timezone.utc).isoformat()
     duration = time.perf_counter() - start

@@ -14,11 +14,12 @@ filtering and comparison across backends and datasets.
 """
 
 import json
+import os
+import traceback
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-import os
 
 import altair as alt
 import pandas as pd
@@ -37,6 +38,7 @@ from smartfiles.embeddings.embedding_model import (
 
 
 DEFAULT_RUNS_PATH = Path.home() / ".retrieval_evaluator" / "beir_runs.jsonl"
+ERRORS_PATH = Path.home() / ".retrieval_evaluator" / "beir_errors.jsonl"
 
 
 @dataclass
@@ -69,6 +71,9 @@ class RunRecord:
         cfg = self.raw.get("config") or {}
         extra = cfg.get("extra_params") or {}
         val = extra.get("embedding_profile")
+        if val is None:
+            meta = self.raw.get("backend_metadata") or {}
+            val = meta.get("embedding_profile")
         return str(val) if val is not None else None
 
     @property
@@ -76,6 +81,9 @@ class RunRecord:
         cfg = self.raw.get("config") or {}
         extra = cfg.get("extra_params") or {}
         val = extra.get("embedding_model_override")
+        if val is None:
+            meta = self.raw.get("backend_metadata") or {}
+            val = meta.get("embedding_model_override")
         return str(val) if val is not None else None
 
     @property
@@ -181,6 +189,53 @@ def main() -> None:
     if "is_running_benchmark" not in st.session_state:
         st.session_state["is_running_benchmark"] = False
 
+    # Show any recently logged errors so that failures from previous
+    # runs are visible even after a reload.
+    with st.expander("Recent benchmark errors", expanded=False):
+        if ERRORS_PATH.exists():
+            try:
+                rows: List[Dict[str, Any]] = []
+                with ERRORS_PATH.open("r", encoding="utf-8") as ef:
+                    for line in ef:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        rows.append(obj)
+                if rows:
+                    # Show the most recent errors first.
+                    rows = rows[-50:]
+                    df_err = pd.DataFrame(rows)
+                    if "timestamp" in df_err.columns:
+                        df_err = df_err.sort_values("timestamp", ascending=False)
+                    st.dataframe(
+                        df_err[
+                            [
+                                c
+                                for c in [
+                                    "timestamp",
+                                    "dataset",
+                                    "split",
+                                    "embedding_profile",
+                                    "embedding_model_override",
+                                    "backend_name",
+                                    "error",
+                                ]
+                                if c in df_err.columns
+                            ]
+                        ],
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("No errors logged yet.")
+            except Exception:
+                st.caption("Failed to read error log.")
+        else:
+            st.caption("No errors logged yet.")
+
     with st.expander("Run new BEIR benchmark", expanded=False):
         dataset_name = st.text_input("Dataset name", value="scifact", key="dataset_name")
         dataset_dir = st.text_input(
@@ -281,9 +336,29 @@ def main() -> None:
                                 logger.append([result])
                                 successful += 1
                             except Exception as exc:  # noqa: BLE001
+                                # Surface the error in the UI and also persist a
+                                # structured record so failures are debuggable later.
                                 st.error(
                                     f"Error while running profile '{profile_choice}': {exc}"
                                 )
+
+                                try:
+                                    ERRORS_PATH.parent.mkdir(parents=True, exist_ok=True)
+                                    error_record = {
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                        "dataset": dataset_name,
+                                        "split": split,
+                                        "embedding_profile": profile_choice,
+                                        "embedding_model_override": custom_model.strip() or None,
+                                        "backend_name": getattr(backend, "name", None),
+                                        "error": str(exc),
+                                        "traceback": traceback.format_exc(),
+                                    }
+                                    with ERRORS_PATH.open("a", encoding="utf-8") as ef:
+                                        ef.write(json.dumps(error_record) + "\n")
+                                except Exception:
+                                    # If logging the error itself fails, don't crash the UI.
+                                    pass
 
                             progress_bar.progress(idx / total_profiles)
 
