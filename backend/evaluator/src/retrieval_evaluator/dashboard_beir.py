@@ -189,6 +189,11 @@ def main() -> None:
     if "is_running_benchmark" not in st.session_state:
         st.session_state["is_running_benchmark"] = False
 
+    # Load existing runs once so we can both display them and use
+    # them to support "resume"-style behavior in the runner.
+    records = load_runs(runs_path)
+    df = to_dataframe(records) if records else pd.DataFrame()
+
     # Show any recently logged errors so that failures from previous
     # runs are visible even after a reload.
     with st.expander("Recent benchmark errors", expanded=False):
@@ -249,6 +254,23 @@ def main() -> None:
         batch_size = st.number_input("Batch size", min_value=1, max_value=2048, value=128, step=1, key="batch_size")
         tag = st.text_input("Tag (optional)", value="", key="run_tag")
 
+        # Determine which profiles already have runs for this
+        # dataset/split/tag so we can optionally skip them when running
+        # a batch, which effectively lets users "resume" a partially
+        # completed batch.
+        existing_profiles_for_run: set[str] = set()
+        if not df.empty:
+            mask = (df["dataset"] == dataset_name) & (df["split"] == split)
+            current_tag = tag or None
+            if current_tag is None:
+                mask &= df["tag"].isna()
+            else:
+                mask &= df["tag"] == current_tag
+            if mask.any():
+                existing_profiles_for_run = set(
+                    df.loc[mask, "embedding_profile"].dropna().tolist()
+                )
+
         st.markdown("**Embedding models**")
         supported = list_supported_models()
         profile_keys = [m.key for m in supported]
@@ -261,6 +283,17 @@ def main() -> None:
             default=default_profiles,
             format_func=lambda k: profile_labels.get(k, k),
             key="embedding_profiles",
+        )
+
+        skip_existing = st.checkbox(
+            "Skip profiles that already have runs for this dataset/split/tag",
+            value=bool(existing_profiles_for_run),
+            help=(
+                "When enabled, running a batch will only execute models that "
+                "do not yet have a logged run for the chosen dataset, split, "
+                "and tag. This makes it easy to resume a partially completed "
+                "batch after an interruption."
+            ),
         )
 
         custom_model = st.text_input(
@@ -283,20 +316,33 @@ def main() -> None:
             elif not selected_profiles:
                 st.error("Please select at least one embedding profile to run.")
             else:
+                profiles_to_run = list(selected_profiles)
+                if skip_existing and existing_profiles_for_run:
+                    profiles_to_run = [
+                        p for p in selected_profiles if p not in existing_profiles_for_run
+                    ]
+
+                if not profiles_to_run:
+                    st.info(
+                        "All selected profiles already have runs for this dataset/split/tag. "
+                        "Adjust the selection or disable skipping to run them again."
+                    )
+                    return
+
                 st.session_state["is_running_benchmark"] = True
                 try:
                     with st.spinner("Running BEIR evaluation(s) with SmartFiles backend..."):
                         dataset = BeirDataset(name=dataset_name, data_dir=str(data_path))
                         corpus, queries, qrels = dataset.load(split=split)
 
-                        total_profiles = len(selected_profiles)
+                        total_profiles = len(profiles_to_run)
                         status_placeholder = st.empty()
                         progress_bar = st.progress(0.0)
                         logger = JsonlRunLogger(runs_path)
 
                         successful = 0
 
-                        for idx, profile_choice in enumerate(selected_profiles, start=1):
+                        for idx, profile_choice in enumerate(profiles_to_run, start=1):
                             status_placeholder.write(
                                 f"Running profile {profile_choice} ({idx}/{total_profiles})..."
                             )
@@ -376,15 +422,13 @@ def main() -> None:
                 finally:
                     st.session_state["is_running_benchmark"] = False
 
-    records = load_runs(runs_path)
-    if not records:
+    if df.empty:
         st.warning(
             "No evaluator runs found yet. Run the evaluator BEIR CLI first "
-            "(e.g. via retrieval_evaluator.cli_smartfiles_beir)."
+            "(e.g. via retrieval_evaluator.cli_smartfiles_beir) or start a "
+            "benchmark run above."
         )
         return
-
-    df = to_dataframe(records)
 
     with st.sidebar:
         st.header("Filters")
