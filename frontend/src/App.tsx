@@ -111,7 +111,7 @@ function App() {
     }
   }
 
-    const handleReindexFolder = async (folderPath: string) => {
+  const handleReindexFolder = async (folderPath: string) => {
       const trimmed = folderPath.trim()
       if (!trimmed) {
         setIndexError('Folder path is missing for this entry')
@@ -138,15 +138,16 @@ function App() {
 
         setIndexStatus('Re-indexing completed successfully')
 
-        try {
-          const foldersRes = await fetch(`${API_BASE_URL}/folders`)
-          if (foldersRes.ok) {
-            const data: Folder[] = await foldersRes.json()
-            setFolders(data)
-          }
-        } catch (error) {
-          console.error(error)
+      try {
+        const foldersRes = await fetch(`${API_BASE_URL}/folders`)
+        if (foldersRes.ok) {
+          const data: Folder[] = await foldersRes.json()
+          setFoldersError(null)
+          setFolders(data)
         }
+      } catch (error) {
+        console.error(error)
+      }
       } catch (error) {
         console.error(error)
         setIndexError('Re-indexing request failed')
@@ -187,6 +188,7 @@ function App() {
         const foldersRes = await fetch(`${API_BASE_URL}/folders`)
         if (foldersRes.ok) {
           const data: Folder[] = await foldersRes.json()
+          setFoldersError(null)
           setFolders(data)
         }
       } catch (error) {
@@ -213,6 +215,7 @@ function App() {
       const foldersRes = await fetch(`${API_BASE_URL}/folders`)
       if (foldersRes.ok) {
         const data: Folder[] = await foldersRes.json()
+        setFoldersError(null)
         setFolders(data)
       }
     } catch (error) {
@@ -234,6 +237,7 @@ function App() {
         throw new Error(`Reorder failed: ${res.status}`)
       }
       const data: Folder[] = await res.json()
+      setFoldersError(null)
       setFolders(data)
     } catch (error) {
       console.error(error)
