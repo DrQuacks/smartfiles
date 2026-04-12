@@ -28,18 +28,13 @@ from smartfiles.folder_registry import (
 app = FastAPI(title="SmartFiles API", version="0.1.0")
 
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-
+# In the local desktop app we want to be permissive so that the
+# frontend (typically running on localhost:5173 via Vite) can reach
+# the API without CORS issues.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
