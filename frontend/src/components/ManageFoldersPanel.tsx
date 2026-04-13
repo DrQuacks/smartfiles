@@ -99,7 +99,10 @@ export default function ManageFoldersPanel({
       <div className="manage-folders-content">
         <div className="folder-list-section">
           <h3>Indexed Folders</h3>
-          {foldersError && <p className="error-text">{foldersError}</p>}
+          {foldersError &&
+            (folders.length === 0 || foldersError !== 'Unable to load indexed folders') && (
+              <p className="error-text">{foldersError}</p>
+            )}
           {!foldersError && folders.length === 0 && (
             <p className="muted">No folders have been indexed yet.</p>
           )}

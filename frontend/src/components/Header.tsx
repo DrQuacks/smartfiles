@@ -140,7 +140,9 @@ export default function Header({
           </form>
           {searchError && <p className="error-text error-inline">{searchError}</p>}
 
-          {foldersError && <p className="error-text error-inline">{foldersError}</p>}
+          {foldersError && folders.length === 0 && (
+            <p className="error-text error-inline">{foldersError}</p>
+          )}
           {!foldersError && folders.length === 0 && (
             <p className="helper-text">No indexed folders yet. Use the Manage Folders tab to add one.</p>
           )}
