@@ -80,9 +80,13 @@ export default function DocumentList({
                   {pageSummary && (
                     <span className="result-page">{pageSummary}</span>
                   )}
-                  <span className="result-score">
-                    {result.score.toFixed(1)}
-                  </span>
+                  {result.rerank_score == null ? (
+                    <span className="result-score result-score-skeleton" />
+                  ) : (
+                    <span className="result-score">
+                      {result.rerank_score.toFixed(1)}
+                    </span>
+                  )}
                 </div>
                 {result.filepath && (
                   <div className="result-meta">

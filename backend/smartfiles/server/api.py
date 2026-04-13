@@ -17,6 +17,7 @@ from smartfiles.ingestion.indexer import (
     index_progress,
 )
 from smartfiles.search.search_engine import run_search
+from smartfiles.search.reranker import rerank
 from smartfiles.folder_registry import (
     FolderEntry,
     delete_folder_by_name,
@@ -89,6 +90,23 @@ class SearchResponse(BaseModel):
     page_start: Optional[int] = None
     page_end: Optional[int] = None
     folder_name: Optional[str] = None
+
+
+class RerankItem(BaseModel):
+    id: str
+    text: str
+    score: float
+    filepath: Optional[str] = None
+
+
+class RerankRequest(BaseModel):
+    query: str
+    results: list[RerankItem]
+
+
+class RerankResult(BaseModel):
+    id: str
+    rerank_score: float
 
 
 class FolderInfo(BaseModel):
@@ -315,6 +333,35 @@ def api_search(query: str, k: int = 5, folders: Optional[str] = None) -> list[Se
             filtered.append(item)
 
     return [SearchResponse(**r) for r in filtered]
+
+
+@app.post("/search/rerank", response_model=list[RerankResult])
+def api_search_rerank(payload: RerankRequest) -> list[RerankResult]:
+    """Re-rank an existing set of search results with a cross-encoder.
+
+    The client first calls `/search` to obtain a list of candidates,
+    then posts those candidates here along with the original query.
+    This endpoint scores the candidates with a cross-encoder model
+    and returns per-item `rerank_score` values sorted in descending
+    order. The caller can merge these scores back into its own
+    representation and optionally reorder the list.
+    """
+
+    if not payload.query.strip():
+        return []
+
+    items = [
+        {
+            "id": r.id,
+            "text": r.text,
+            "score": float(r.score),
+            "filepath": r.filepath,
+        }
+        for r in payload.results
+    ]
+
+    scored = rerank(payload.query, items)
+    return [RerankResult(id=it["id"], rerank_score=it["rerank_score"]) for it in scored]
 
 
 @app.get("/file")

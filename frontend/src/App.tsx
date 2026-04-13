@@ -100,8 +100,62 @@ function App() {
       }
       const data: SearchResult[] = await res.json()
       const aggregated = dedupeResultsByFile(data, k)
-      setResults(aggregated)
-      setSelectedIndex(aggregated.length > 0 ? 0 : null)
+
+      // Show initial results immediately with pending scores; the UI
+      // will render skeleton pills until rerank scores arrive.
+      const withPending = aggregated.map((r) => ({ ...r, rerank_score: null }))
+      setResults(withPending)
+      setSelectedIndex(withPending.length > 0 ? 0 : null)
+
+      // Fire-and-forget rerank request; when it returns we hydrate
+      // rerank_score values and optionally adjust ordering.
+      void (async () => {
+        try {
+          const rerankRes = await fetch(`${API_BASE_URL}/search/rerank`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: trimmed,
+              results: withPending.map((r) => ({
+                id: r.id,
+                text: r.text,
+                score: r.score,
+                filepath: r.filepath,
+              })),
+            }),
+          })
+          if (!rerankRes.ok) {
+            return
+          }
+          const reranked: { id: string; rerank_score: number }[] =
+            await rerankRes.json()
+          const scoreById = new Map(reranked.map((r) => [r.id, r.rerank_score]))
+
+          setResults((current) => {
+            const updated = current.map((r) => {
+              const s = scoreById.get(r.id)
+              if (s == null) return r
+              return { ...r, rerank_score: s }
+            })
+
+            // Reorder by rerank_score when available, falling back
+            // to original order for items that lack a rerank score.
+            const sorted = [...updated].sort((a, b) => {
+              const sa = a.rerank_score
+              const sb = b.rerank_score
+              if (sa == null && sb == null) return 0
+              if (sa == null) return 1
+              if (sb == null) return -1
+              return sb - sa
+            })
+            return sorted
+          })
+        } catch (error) {
+          console.error(error)
+        }
+      })()
     } catch (error) {
       console.error(error)
       setSearchError('Search request failed')

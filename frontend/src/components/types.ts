@@ -12,6 +12,9 @@ export type SearchResult = {
   chunk_index?: number
   page_start?: number
   page_end?: number
+  // Optional score from a secondary reranker stage. When present,
+  // the UI prefers this over the base `score` from vector search.
+  rerank_score?: number | null
 }
 
 export type Folder = {

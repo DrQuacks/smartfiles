@@ -35,7 +35,9 @@ def run_search(
 
     # Lightweight reranking: boost results where query terms appear
     # in the filename or chunk text. This keeps the primary vector
-    # search but nudges obviously relevant documents upward.
+    # search but nudges obviously relevant documents upward, without
+    # suppressing purely semantic matches (for example, a document
+    # about lizards when searching for "gecko").
     tokens = [t.lower() for t in query.split() if len(t) > 2]
     if tokens and results:
         rescored: List[Dict[str, Any]] = []
@@ -48,9 +50,10 @@ def run_search(
             filename_hits = sum(1 for tok in tokens if tok in filename)
             text_hits = sum(1 for tok in tokens if tok in text)
 
-            # Cap contributions so long documents don't dominate.
+            # Cap positive contributions so long documents don't dominate.
             filename_boost = min(15.0, 5.0 * filename_hits)
             text_boost = min(10.0, 2.0 * text_hits)
+
             combined = score + filename_boost + text_boost
 
             # Store a transient combined score for sorting only.
