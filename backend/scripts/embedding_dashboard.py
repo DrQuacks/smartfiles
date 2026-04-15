@@ -140,9 +140,11 @@ def compute_basic_stats(embeddings: np.ndarray) -> Dict[str, Any]:
     # L2 norms per vector.
     norms = np.linalg.norm(embeddings, axis=1)
 
-    # Per-dimension mean and standard deviation.
+    # Per-dimension mean, standard deviation, and range.
     mean = embeddings.mean(axis=0)
     std = embeddings.std(axis=0)
+    dim_min = embeddings.min(axis=0)
+    dim_max = embeddings.max(axis=0)
 
     # Sort dimensions by variance (descending) for inspection.
     var = std ** 2
@@ -154,6 +156,8 @@ def compute_basic_stats(embeddings: np.ndarray) -> Dict[str, Any]:
         "norms": norms,
         "mean": mean,
         "std": std,
+        "min": dim_min,
+        "max": dim_max,
         "var": var,
         "sorted_dims": order,
     }
@@ -328,7 +332,7 @@ def main() -> None:
         # Sorting controls for the per-dimension table.
         sort_col = st.selectbox(
             "Sort by",
-            options=["variance", "std", "mean", "dim"],
+            options=["variance", "std", "mean", "range", "dim"],
             index=0,
             key="dims_sort_col",
         )
@@ -350,15 +354,21 @@ def main() -> None:
     var: np.ndarray = stats["var"]
     mean: np.ndarray = stats["mean"]
     std: np.ndarray = stats["std"]
+    dim_min: np.ndarray = stats["min"]
+    dim_max: np.ndarray = stats["max"]
 
     # Build a full per-dimension table (one row per embedding dimension).
     dim_indices = np.arange(len(var))
+    dim_range = dim_max - dim_min
     df_dims = pd.DataFrame(
         {
             "dim": dim_indices,
             "variance": var,
             "std": std,
             "mean": mean,
+            "min": dim_min,
+            "max": dim_max,
+            "range": dim_range,
         }
     )
 
