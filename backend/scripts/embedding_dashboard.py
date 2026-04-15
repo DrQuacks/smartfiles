@@ -62,16 +62,26 @@ def peek_embeddings(collection: Any, limit: int) -> Dict[str, Any]:
     base = collection.peek(limit=limit)
 
     # If embeddings are already present (newer Chroma), just return.
-    if base.get("embeddings"):
+    embeddings = base.get("embeddings")
+    try:
+        has_embeddings = embeddings is not None and len(embeddings) > 0
+    except TypeError:
+        # Fallback if object doesn't support len().
+        has_embeddings = bool(embeddings is not None)
+    if has_embeddings:
         return base
 
     # Otherwise, try to fetch full records for the peeked IDs.
     ids = base.get("ids") or []
+    # Normalize possible NumPy arrays to lists to avoid ambiguous
+    # truth-value checks.
+    if isinstance(ids, np.ndarray):
+        ids = ids.tolist()
     if isinstance(ids, list) and ids and isinstance(ids[0], list):
         # ``peek`` may return ids as ``[[...]]`` similar to ``query``.
         ids = ids[0]
 
-    if ids:
+    if isinstance(ids, (list, tuple)) and len(ids) > 0:
         detail = collection.get(ids=ids, include=["embeddings", "documents", "metadatas"])
         return {
             "embeddings": detail.get("embeddings") or [],
@@ -88,10 +98,22 @@ def extract_embedding_matrix(peek_result: Dict[str, Any]) -> Tuple[np.ndarray, L
     Returns (embeddings, metadatas).
     """
 
-    embeddings = peek_result.get("embeddings") or []
+    embeddings = peek_result.get("embeddings")
+    # Normalize possible NumPy arrays or None into a plain sequence
+    # before checking emptiness.
+    if isinstance(embeddings, np.ndarray):
+        if embeddings.size == 0:
+            embeddings = []
+    elif embeddings is None:
+        embeddings = []
     metadatas = peek_result.get("metadatas") or []
 
-    if not embeddings:
+    try:
+        is_empty = len(embeddings) == 0
+    except TypeError:
+        is_empty = False
+
+    if is_empty:
         raise RuntimeError(
             "No embeddings returned from Chroma. Make sure your index is "
             "built with embeddings stored, and that the collection is not empty."
