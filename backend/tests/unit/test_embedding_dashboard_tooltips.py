@@ -45,3 +45,32 @@ def test_toggle_help_idempotence_on_empty():
     assert toggle_help("", "") == ""
     # If somehow active is an unknown value, clicking another still switches.
     assert toggle_help("unknown", "norms") == "norms"
+
+
+def test_toggle_help_click_sequences():
+    # Simulate realistic click sequences as in the UI.
+
+    # 1) Click norms once -> norms
+    state = ""
+    state = toggle_help(state, "norms")
+    assert state == "norms"
+
+    # 2) Click sampling -> switches from norms to sampling
+    state = toggle_help(state, "sampling")
+    assert state == "sampling"
+
+    # 3) Click sampling again -> closes sampling (none active)
+    state = toggle_help(state, "sampling")
+    assert state == ""
+
+    # 4) Click dims, then pca, then dims again
+    state = toggle_help(state, "dims")
+    assert state == "dims"
+    state = toggle_help(state, "pca")
+    assert state == "pca"
+    state = toggle_help(state, "dims")
+    assert state == "dims"
+
+    # 5) Rapid toggling back to none via same section
+    state = toggle_help(state, "dims")
+    assert state == ""
