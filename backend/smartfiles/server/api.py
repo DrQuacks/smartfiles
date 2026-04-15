@@ -86,10 +86,10 @@ class SearchResponse(BaseModel):
     id: str
     text: str
     score: float
-    score_drop20: Optional[float] = None
-    score_drop40: Optional[float] = None
-    score_drop60: Optional[float] = None
-    score_drop80: Optional[float] = None
+    score_drop50: Optional[float] = None
+    score_drop75: Optional[float] = None
+    score_drop90: Optional[float] = None
+    score_drop95: Optional[float] = None
     filepath: Optional[str] = None
     chunk_index: Optional[int] = None
     page_start: Optional[int] = None
@@ -406,7 +406,7 @@ def api_search_dimdrop(payload: DimdropRequest) -> list[DimdropResult]:
     if field is None:
         raise HTTPException(
             status_code=400,
-            detail="drop_fraction must be one of 0.2, 0.4, 0.6, 0.8",
+            detail="drop_fraction must be one of 0.5, 0.75, 0.9, 0.95",
         )
 
     items = [

@@ -98,16 +98,16 @@ export default function DocumentList({
                     base: {result.score.toFixed(1)}
                   </span>
                   <span className="result-score-variant">
-                    -20%: {result.score_drop20 != null ? result.score_drop20.toFixed(1) : '–'}
+                    -50%: {result.score_drop50 != null ? result.score_drop50.toFixed(1) : '–'}
                   </span>
                   <span className="result-score-variant">
-                    -40%: {result.score_drop40 != null ? result.score_drop40.toFixed(1) : '–'}
+                    -75%: {result.score_drop75 != null ? result.score_drop75.toFixed(1) : '–'}
                   </span>
                   <span className="result-score-variant">
-                    -60%: {result.score_drop60 != null ? result.score_drop60.toFixed(1) : '–'}
+                    -90%: {result.score_drop90 != null ? result.score_drop90.toFixed(1) : '–'}
                   </span>
                   <span className="result-score-variant">
-                    -80%: {result.score_drop80 != null ? result.score_drop80.toFixed(1) : '–'}
+                    -95%: {result.score_drop95 != null ? result.score_drop95.toFixed(1) : '–'}
                   </span>
                 </div>
                 {result.filepath && (

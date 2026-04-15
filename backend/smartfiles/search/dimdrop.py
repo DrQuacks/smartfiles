@@ -11,10 +11,10 @@ from smartfiles.embeddings.embedding_model import EmbeddingModel
 _DEBUG_DIMDROP = os.getenv("SMARTFILES_DEBUG_DIMDROP", "").lower() in {"1", "true", "yes"}
 
 _DIMDROP_FIELD_BY_PERCENT: Dict[int, str] = {
-    20: "score_drop20",
-    40: "score_drop40",
-    60: "score_drop60",
-    80: "score_drop80",
+    50: "score_drop50",
+    75: "score_drop75",
+    90: "score_drop90",
+    95: "score_drop95",
 }
 
 
@@ -22,8 +22,8 @@ def dimdrop_field_for_fraction(drop_fraction: float) -> str | None:
     """Return the response field name for a drop fraction.
 
     Examples:
-    - 0.2 -> "score_drop20"
-    - 0.4 -> "score_drop40"
+    - 0.5 -> "score_drop50"
+    - 0.75 -> "score_drop75"
     """
 
     pct = int(round(float(drop_fraction) * 100.0))
@@ -61,17 +61,17 @@ def add_dimdrop_similarity_scores(
     embedder: EmbeddingModel,
     query_embedding: Sequence[float],
     results: List[Dict[str, Any]],
-    drop_fractions: Iterable[float] = (0.2, 0.4, 0.6, 0.8),
+    drop_fractions: Iterable[float] = (0.5, 0.75, 0.9, 0.95),
 ) -> None:
     """Augment results with similarity scores under dim-drop variants.
 
     This keeps the input ``results`` list order unchanged and simply
     attaches additional keys on each item:
 
-    - ``score_drop20`` – 20% lowest-variance dimensions removed
-    - ``score_drop40`` – 40% lowest-variance dimensions removed
-    - ``score_drop60`` – 60% lowest-variance dimensions removed
-    - ``score_drop80`` – 80% lowest-variance dimensions removed
+    - ``score_drop50`` – 50% lowest-variance dimensions removed
+    - ``score_drop75`` – 75% lowest-variance dimensions removed
+    - ``score_drop90`` – 90% lowest-variance dimensions removed
+    - ``score_drop95`` – 95% lowest-variance dimensions removed
 
     Scores are computed as cosine similarities mapped to the same
     0–100 scale used by ``ChromaVectorStore.search``.
@@ -162,10 +162,10 @@ def add_dimdrop_similarity_scores(
                 {
                     "id": _id,
                     "base": float(item.get("score", 0.0)),
-                    "drop20": float(item.get("score_drop20", float("nan"))),
-                    "drop40": float(item.get("score_drop40", float("nan"))),
-                    "drop60": float(item.get("score_drop60", float("nan"))),
-                    "drop80": float(item.get("score_drop80", float("nan"))),
+                    "drop50": float(item.get("score_drop50", float("nan"))),
+                    "drop75": float(item.get("score_drop75", float("nan"))),
+                    "drop90": float(item.get("score_drop90", float("nan"))),
+                    "drop95": float(item.get("score_drop95", float("nan"))),
                 }
             )
 

@@ -34,17 +34,17 @@ function App() {
   const dimdropTotalSteps = 4
   const searchRunRef = useRef(0)
 
-  type DropField = 'score_drop20' | 'score_drop40' | 'score_drop60' | 'score_drop80'
+  type DropField = 'score_drop50' | 'score_drop75' | 'score_drop90' | 'score_drop95'
 
   const applyDropScore = (
     result: SearchResult,
     field: DropField,
     value: number,
   ): SearchResult => {
-    if (field === 'score_drop20') return { ...result, score_drop20: value }
-    if (field === 'score_drop40') return { ...result, score_drop40: value }
-    if (field === 'score_drop60') return { ...result, score_drop60: value }
-    return { ...result, score_drop80: value }
+    if (field === 'score_drop50') return { ...result, score_drop50: value }
+    if (field === 'score_drop75') return { ...result, score_drop75: value }
+    if (field === 'score_drop90') return { ...result, score_drop90: value }
+    return { ...result, score_drop95: value }
   }
 
   useEffect(() => {
@@ -130,10 +130,10 @@ function App() {
       const withPending = aggregated.map((r) => ({
         ...r,
         rerank_score: null,
-        score_drop20: null,
-        score_drop40: null,
-        score_drop60: null,
-        score_drop80: null,
+        score_drop50: null,
+        score_drop75: null,
+        score_drop90: null,
+        score_drop95: null,
       }))
       setResults(withPending)
       setSelectedIndex(withPending.length > 0 ? 0 : null)
@@ -193,10 +193,10 @@ function App() {
       // results list (20 -> 40 -> 60 -> 80).
       void (async () => {
         const variants: Array<{ fraction: number; field: DropField }> = [
-          { fraction: 0.2, field: 'score_drop20' },
-          { fraction: 0.4, field: 'score_drop40' },
-          { fraction: 0.6, field: 'score_drop60' },
-          { fraction: 0.8, field: 'score_drop80' },
+          { fraction: 0.5, field: 'score_drop50' },
+          { fraction: 0.75, field: 'score_drop75' },
+          { fraction: 0.9, field: 'score_drop90' },
+          { fraction: 0.95, field: 'score_drop95' },
         ]
 
         setIsDimdropScoring(true)

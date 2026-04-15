@@ -156,7 +156,7 @@ export default function Header({
           )}
           {!isSearching && isDimdropScoring && !searchError && (
             <p className="helper-text small search-progress">
-              Computing drop scores: {dimdropCompletedSteps}/{dimdropTotalSteps} ready (20% → 80%).
+              Computing drop scores: {dimdropCompletedSteps}/{dimdropTotalSteps} ready (50% → 95%).
             </p>
           )}
           {!foldersError && folders.length === 0 && (
