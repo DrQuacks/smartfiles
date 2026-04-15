@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from typing import Iterable, List, Dict, Any
 
@@ -44,9 +45,20 @@ def rerank(query: str, items: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     model = _get_model()
     pairs = [(query, str(it.get("text", ""))) for it in items_list]
-    scores = model.predict(pairs)
+    scores = [float(s) for s in model.predict(pairs)]
 
-    for it, score in zip(items_list, scores):
+    # Query-relative normalization: spread scores across [0, 100]
+    # based on the best and worst candidate for this query. This
+    # preserves ordering while making the display values easier to
+    # interpret than raw logits, and avoids collapsing many items to 0.
+    s_min = min(scores)
+    s_max = max(scores)
+    if s_max == s_min:
+        norm = [50.0 for _ in scores]
+    else:
+        norm = [((s - s_min) / (s_max - s_min)) * 100.0 for s in scores]
+
+    for it, score in zip(items_list, norm):
         it["rerank_score"] = float(score)
 
     items_list.sort(key=lambda it: it.get("rerank_score", 0.0), reverse=True)
