@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 import { API_BASE_URL } from './config'
@@ -29,6 +29,23 @@ function App() {
   const selectedResult = selectedIndex != null ? results[selectedIndex] : null
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [isDimdropScoring, setIsDimdropScoring] = useState(false)
+  const [dimdropCompletedSteps, setDimdropCompletedSteps] = useState(0)
+  const dimdropTotalSteps = 4
+  const searchRunRef = useRef(0)
+
+  type DropField = 'score_drop20' | 'score_drop40' | 'score_drop60' | 'score_drop80'
+
+  const applyDropScore = (
+    result: SearchResult,
+    field: DropField,
+    value: number,
+  ): SearchResult => {
+    if (field === 'score_drop20') return { ...result, score_drop20: value }
+    if (field === 'score_drop40') return { ...result, score_drop40: value }
+    if (field === 'score_drop60') return { ...result, score_drop60: value }
+    return { ...result, score_drop80: value }
+  }
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -72,15 +89,22 @@ function App() {
 
   const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const runId = searchRunRef.current + 1
+    searchRunRef.current = runId
+
     const trimmed = query.trim()
     if (!trimmed) {
       setResults([])
       setSearchError(null)
       setSelectedIndex(null)
+      setIsDimdropScoring(false)
+      setDimdropCompletedSteps(0)
       return
     }
 
     setIsSearching(true)
+    setIsDimdropScoring(false)
+    setDimdropCompletedSteps(0)
     setSearchError(null)
 
     try {
@@ -103,7 +127,14 @@ function App() {
 
       // Show initial results immediately with pending scores; the UI
       // will render skeleton pills until rerank scores arrive.
-      const withPending = aggregated.map((r) => ({ ...r, rerank_score: null }))
+      const withPending = aggregated.map((r) => ({
+        ...r,
+        rerank_score: null,
+        score_drop20: null,
+        score_drop40: null,
+        score_drop60: null,
+        score_drop80: null,
+      }))
       setResults(withPending)
       setSelectedIndex(withPending.length > 0 ? 0 : null)
 
@@ -131,6 +162,7 @@ function App() {
           }
           const reranked: { id: string; rerank_score: number }[] =
             await rerankRes.json()
+          if (runId !== searchRunRef.current) return
           const scoreById = new Map(reranked.map((r) => [r.id, r.rerank_score]))
 
           setResults((current) => {
@@ -156,10 +188,73 @@ function App() {
           console.error(error)
         }
       })()
+
+      // Compute dim-drop scores progressively for the already selected
+      // results list (20 -> 40 -> 60 -> 80).
+      void (async () => {
+        const variants: Array<{ fraction: number; field: DropField }> = [
+          { fraction: 0.2, field: 'score_drop20' },
+          { fraction: 0.4, field: 'score_drop40' },
+          { fraction: 0.6, field: 'score_drop60' },
+          { fraction: 0.8, field: 'score_drop80' },
+        ]
+
+        setIsDimdropScoring(true)
+        setDimdropCompletedSteps(0)
+
+        try {
+          for (let i = 0; i < variants.length; i += 1) {
+            if (runId !== searchRunRef.current) return
+            const variant = variants[i]
+
+            const dimdropRes = await fetch(`${API_BASE_URL}/search/dimdrop`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                query: trimmed,
+                drop_fraction: variant.fraction,
+                results: withPending.map((r) => ({
+                  id: r.id,
+                  text: r.text,
+                  score: r.score,
+                  filepath: r.filepath,
+                })),
+              }),
+            })
+
+            if (!dimdropRes.ok) {
+              continue
+            }
+
+            const scored: { id: string; score: number }[] = await dimdropRes.json()
+            if (runId !== searchRunRef.current) return
+
+            const scoreById = new Map(scored.map((r) => [r.id, r.score]))
+            setResults((current) =>
+              current.map((r) => {
+                const s = scoreById.get(r.id)
+                if (s == null) return r
+                return applyDropScore(r, variant.field, s)
+              }),
+            )
+            setDimdropCompletedSteps(i + 1)
+          }
+        } catch (error) {
+          console.error(error)
+        } finally {
+          if (runId === searchRunRef.current) {
+            setIsDimdropScoring(false)
+          }
+        }
+      })()
     } catch (error) {
       console.error(error)
       setSearchError('Search request failed')
       setResults([])
+      setIsDimdropScoring(false)
+      setDimdropCompletedSteps(0)
     } finally {
       setIsSearching(false)
     }
@@ -307,6 +402,9 @@ function App() {
         query={query}
         k={k}
         isSearching={isSearching}
+        isDimdropScoring={isDimdropScoring}
+        dimdropCompletedSteps={dimdropCompletedSteps}
+        dimdropTotalSteps={dimdropTotalSteps}
         searchError={searchError}
         activeTab={activeTab}
         onTabChange={setActiveTab}

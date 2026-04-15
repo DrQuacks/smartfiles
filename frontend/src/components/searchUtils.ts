@@ -26,7 +26,7 @@ export function formatPageRange(result: SearchResult): string | null {
 }
 
 export type AggregatedResult = SearchResult & {
-  page_summary?: string
+  page_summary?: string | null
 }
 
 function collectPagesFromResult(set: Set<number>, result: SearchResult): void {

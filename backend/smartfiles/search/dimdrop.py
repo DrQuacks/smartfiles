@@ -10,6 +10,25 @@ from smartfiles.embeddings.embedding_model import EmbeddingModel
 
 _DEBUG_DIMDROP = os.getenv("SMARTFILES_DEBUG_DIMDROP", "").lower() in {"1", "true", "yes"}
 
+_DIMDROP_FIELD_BY_PERCENT: Dict[int, str] = {
+    20: "score_drop20",
+    40: "score_drop40",
+    60: "score_drop60",
+    80: "score_drop80",
+}
+
+
+def dimdrop_field_for_fraction(drop_fraction: float) -> str | None:
+    """Return the response field name for a drop fraction.
+
+    Examples:
+    - 0.2 -> "score_drop20"
+    - 0.4 -> "score_drop40"
+    """
+
+    pct = int(round(float(drop_fraction) * 100.0))
+    return _DIMDROP_FIELD_BY_PERCENT.get(pct)
+
 
 def _build_drop_masks(dim_order_asc: np.ndarray, dim: int, drop_fractions: Sequence[float]) -> Dict[float, np.ndarray]:
     """Build boolean masks for each drop fraction.
@@ -61,13 +80,15 @@ def add_dimdrop_similarity_scores(
     if not results:
         return
 
-    # Map from fraction to response field suffix.
-    fraction_to_field: Dict[float, str] = {
-        0.2: "score_drop20",
-        0.4: "score_drop40",
-        0.6: "score_drop60",
-        0.8: "score_drop80",
-    }
+    # Resolve requested fractions to known output field names.
+    drop_fracs = [float(f) for f in drop_fractions]
+    fraction_to_field: Dict[float, str] = {}
+    for frac in drop_fracs:
+        field = dimdrop_field_for_fraction(frac)
+        if field is not None:
+            fraction_to_field[frac] = field
+    if not fraction_to_field:
+        return
 
     # Normalize the query embedding.
     q = np.asarray(list(query_embedding), dtype=np.float32)
@@ -99,7 +120,6 @@ def add_dimdrop_similarity_scores(
     # Dimensions ordered by increasing variance (lowest first) within
     # this retrieved set.
     dim_order_asc = np.argsort(var)
-    drop_fracs = [float(f) for f in drop_fractions]
     masks = _build_drop_masks(dim_order_asc, dim=dim, drop_fractions=drop_fracs)
 
     # Precompute masked query vectors and norms for each fraction.

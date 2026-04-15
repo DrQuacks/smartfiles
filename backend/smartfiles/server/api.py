@@ -17,6 +17,7 @@ from smartfiles.ingestion.indexer import (
     index_progress,
 )
 from smartfiles.search.search_engine import run_search
+from smartfiles.search.dimdrop import add_dimdrop_similarity_scores, dimdrop_field_for_fraction
 from smartfiles.search.reranker import rerank
 from smartfiles.folder_registry import (
     FolderEntry,
@@ -111,6 +112,24 @@ class RerankRequest(BaseModel):
 class RerankResult(BaseModel):
     id: str
     rerank_score: float
+
+
+class DimdropItem(BaseModel):
+    id: str
+    text: str
+    score: float
+    filepath: Optional[str] = None
+
+
+class DimdropRequest(BaseModel):
+    query: str
+    results: list[DimdropItem]
+    drop_fraction: float
+
+
+class DimdropResult(BaseModel):
+    id: str
+    score: float
 
 
 class FolderInfo(BaseModel):
@@ -366,6 +385,56 @@ def api_search_rerank(payload: RerankRequest) -> list[RerankResult]:
 
     scored = rerank(payload.query, items)
     return [RerankResult(id=it["id"], rerank_score=it["rerank_score"]) for it in scored]
+
+
+@app.post("/search/dimdrop", response_model=list[DimdropResult])
+def api_search_dimdrop(payload: DimdropRequest) -> list[DimdropResult]:
+    """Compute dim-drop similarity scores for an already-ranked result list.
+
+    This endpoint is intentionally separate from `/search` so we can:
+    1) return initial rankings quickly, and
+    2) progressively fill drop-score variants (20/40/60/80) in the UI.
+    """
+
+    if not payload.query.strip():
+        return []
+
+    if state.embedder is None:
+        raise HTTPException(status_code=500, detail="Embedding model not initialized")
+
+    field = dimdrop_field_for_fraction(payload.drop_fraction)
+    if field is None:
+        raise HTTPException(
+            status_code=400,
+            detail="drop_fraction must be one of 0.2, 0.4, 0.6, 0.8",
+        )
+
+    items = [
+        {
+            "id": r.id,
+            "text": r.text,
+            "score": float(r.score),
+            "filepath": r.filepath,
+        }
+        for r in payload.results
+    ]
+
+    query_embedding = state.embedder.embed_texts([payload.query])[0]
+    add_dimdrop_similarity_scores(
+        embedder=state.embedder,
+        query_embedding=query_embedding,
+        results=items,
+        drop_fractions=[payload.drop_fraction],
+    )
+
+    out: list[DimdropResult] = []
+    for item in items:
+        score = item.get(field)
+        if score is None:
+            continue
+        out.append(DimdropResult(id=str(item.get("id", "")), score=float(score)))
+
+    return out
 
 
 @app.get("/file")

@@ -6,13 +6,6 @@ from typing import Any, Dict, List, Optional
 
 from smartfiles.embeddings.embedding_model import EmbeddingModel, get_default_embedding_model
 from smartfiles.database.vector_store import ChromaVectorStore, get_default_vector_store
-from smartfiles.search.dimdrop import add_dimdrop_similarity_scores
-
-
-# Enable dim-drop scoring by default; allow explicit opt-out with
-# SMARTFILES_DIMDROP=0/false/no. This matches the current experiment
-# where we *expect* the extra scores to be present.
-_DIMDROP_ENABLED = os.getenv("SMARTFILES_DIMDROP", "1").lower() not in {"0", "false", "no"}
 
 
 def run_search(
@@ -91,33 +84,5 @@ def run_search(
             f"embed={embed_ms:.1f}ms vector_search={search_ms:.1f}ms "
             f"total={total_ms:.1f}ms"
         )
-
-    # Experimental: attach similarity scores under various
-    # dimension-drop schemes without changing the result order.
-    if _DIMDROP_ENABLED:
-        try:
-            add_dimdrop_similarity_scores(
-                embedder=embedder,
-                query_embedding=embedding,
-                results=results,
-            )
-            # Always log a compact summary for the first result so we
-            # can see whether the dim-drop scores are present.
-            if results:
-                sample = results[0]
-                print(
-                    "[DIMDROP] sample",
-                    sample.get("id"),
-                    {
-                        "base": sample.get("score"),
-                        "drop20": sample.get("score_drop20"),
-                        "drop40": sample.get("score_drop40"),
-                        "drop60": sample.get("score_drop60"),
-                        "drop80": sample.get("score_drop80"),
-                    },
-                    flush=True,
-                )
-        except Exception as exc:
-            print(f"[DIMDROP] scoring failed: {exc}", flush=True)
 
     return results

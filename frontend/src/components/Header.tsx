@@ -7,6 +7,9 @@ export type HeaderProps = {
   query: string
   k: number
   isSearching: boolean
+  isDimdropScoring: boolean
+  dimdropCompletedSteps: number
+  dimdropTotalSteps: number
   searchError: string | null
   activeTab: 'search' | 'folders'
   onTabChange: (tab: 'search' | 'folders') => void
@@ -25,6 +28,9 @@ export default function Header({
   query,
   k,
   isSearching,
+  isDimdropScoring,
+  dimdropCompletedSteps,
+  dimdropTotalSteps,
   searchError,
   activeTab,
   onTabChange,
@@ -48,7 +54,7 @@ export default function Header({
   }
 
   const isSearchDisabled =
-    isSearching || !query.trim() || selectedFolderNames.length === 0
+    isSearching || isDimdropScoring || !query.trim() || selectedFolderNames.length === 0
 
   return (
     <header className="app-header">
@@ -135,7 +141,7 @@ export default function Header({
             </label>
 
             <button type="submit" className="primary-button" disabled={isSearchDisabled}>
-              {isSearching ? 'Searching…' : 'Search'}
+              {isSearching ? 'Searching…' : isDimdropScoring ? 'Scoring variants…' : 'Search'}
             </button>
           </form>
           {searchError && <p className="error-text error-inline">{searchError}</p>}
@@ -146,6 +152,11 @@ export default function Header({
           {isSearching && !searchError && (
             <p className="helper-text small search-progress">
               Running search and computing similarity variants… this can take a few seconds.
+            </p>
+          )}
+          {!isSearching && isDimdropScoring && !searchError && (
+            <p className="helper-text small search-progress">
+              Computing drop scores: {dimdropCompletedSteps}/{dimdropTotalSteps} ready (20% → 80%).
             </p>
           )}
           {!foldersError && folders.length === 0 && (
