@@ -205,6 +205,16 @@ def main() -> None:
     st.caption(f"Data directory: {data_dir}")
     st.caption(f"Chroma DB path: {db_dir}")
 
+    # Initialize sidebar tooltip state.
+    for key in [
+        "show_help_sampling",
+        "show_help_norms",
+        "show_help_dims",
+        "show_help_pca",
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = False
+
     try:
         client, collection = get_collection()
     except Exception as exc:  # pragma: no cover - UI-only
@@ -235,6 +245,22 @@ def main() -> None:
             "for geometric diagnostics."
         )
 
+        # Inline tooltip toggle for the sampling section.
+        row = st.columns([4, 1])
+        with row[0]:
+            st.caption("What does sampling control?")
+        with row[1]:
+            label = "[?]" if not st.session_state["show_help_sampling"] else "[close]"
+            if st.button(label, key="btn_help_sampling"):
+                st.session_state["show_help_sampling"] = not st.session_state["show_help_sampling"]
+        if st.session_state["show_help_sampling"]:
+            st.info(
+                "Sampling controls how many embeddings we pull from the index "
+                "for analysis. Larger samples give more stable statistics but "
+                "take longer to compute. This does not change your SmartFiles "
+                "index; it only affects this dashboard's estimates."
+            )
+
     cols = st.columns(3)
     with cols[0]:
         st.metric("Total indexed vectors", value=str(total_count) if total_count is not None else "unknown")
@@ -256,7 +282,22 @@ def main() -> None:
     with cols[2]:
         st.metric("Embedding dimension", value=str(dim))
 
-    st.subheader("Vector norm distribution")
+    # Header with inline help toggle for norm distribution.
+    hdr_norms = st.columns([4, 1])
+    with hdr_norms[0]:
+        st.subheader("Vector norm distribution")
+    with hdr_norms[1]:
+        label_norms = "[?]" if not st.session_state["show_help_norms"] else "[close]"
+        if st.button(label_norms, key="btn_help_norms_main"):
+            st.session_state["show_help_norms"] = not st.session_state["show_help_norms"]
+    if st.session_state["show_help_norms"]:
+        st.info(
+            "This histogram shows the L2 length (norm) of each sampled "
+            "embedding. If almost all norms cluster around a single value, "
+            "it suggests the encoder (or cosine normalization) is keeping "
+            "vectors at nearly constant length. A wider spread means some "
+            "documents get much larger or smaller magnitudes than others."
+        )
 
     norms: np.ndarray = stats["norms"]
     # Histogram for norms.
@@ -275,7 +316,23 @@ def main() -> None:
     else:
         st.info("No embeddings available to compute norms.")
 
-    st.subheader("Per-dimension statistics (top-variance dimensions)")
+    # Header with inline help toggle for per-dimension stats.
+    hdr_dims = st.columns([4, 1])
+    with hdr_dims[0]:
+        st.subheader("Per-dimension statistics (top-variance dimensions)")
+    with hdr_dims[1]:
+        label_dims = "[?]" if not st.session_state["show_help_dims"] else "[close]"
+        if st.button(label_dims, key="btn_help_dims_main"):
+            st.session_state["show_help_dims"] = not st.session_state["show_help_dims"]
+    if st.session_state["show_help_dims"]:
+        st.info(
+            "The table lists the embedding dimensions with the largest "
+            "variance across your sampled documents. High-variance "
+            "dimensions are where the encoder is spreading points out; "
+            "low-variance ones behave more like a shared background. "
+            "Means near zero suggest a roughly centered dimension; large "
+            "means indicate a persistent bias in that direction."
+        )
 
     var: np.ndarray = stats["var"]
     mean: np.ndarray = stats["mean"]
@@ -294,7 +351,23 @@ def main() -> None:
     )
     st.dataframe(df_dims, use_container_width=True)
 
-    st.subheader("PCA projection (2D)")
+    # Header with inline help toggle for PCA.
+    hdr_pca = st.columns([4, 1])
+    with hdr_pca[0]:
+        st.subheader("PCA projection (2D)")
+    with hdr_pca[1]:
+        label_pca = "[?]" if not st.session_state["show_help_pca"] else "[close]"
+        if st.button(label_pca, key="btn_help_pca_main"):
+            st.session_state["show_help_pca"] = not st.session_state["show_help_pca"]
+    if st.session_state["show_help_pca"]:
+        st.info(
+            "PCA finds the directions of greatest variance in the "
+            "sampled embeddings and projects them into 2D for plotting. "
+            "Each point is a document chunk; proximity in this plot "
+            "reflects similarity along those top components only. The "
+            "explained variance ratios tell you how much of the total "
+            "spread is captured by PC1 and PC2."
+        )
 
     try:
         projected, explained = compute_pca(embeddings, n_components=2)
