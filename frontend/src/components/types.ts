@@ -8,6 +8,10 @@ export type SearchResult = {
   id: string
   text: string
   score: number
+  score_drop20?: number
+  score_drop40?: number
+  score_drop60?: number
+  score_drop80?: number
   filepath?: string
   chunk_index?: number
   page_start?: number

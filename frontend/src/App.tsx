@@ -326,6 +326,7 @@ function App() {
             selectedIndex={selectedIndex}
             onSelectedIndexChange={setSelectedIndex}
             searchError={searchError}
+            isSearching={isSearching}
           />
 
           <PreviewPanel selectedResult={selectedResult} />

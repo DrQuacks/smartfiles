@@ -143,6 +143,11 @@ export default function Header({
           {foldersError && folders.length === 0 && (
             <p className="error-text error-inline">{foldersError}</p>
           )}
+          {isSearching && !searchError && (
+            <p className="helper-text small search-progress">
+              Running search and computing similarity variants… this can take a few seconds.
+            </p>
+          )}
           {!foldersError && folders.length === 0 && (
             <p className="helper-text">No indexed folders yet. Use the Manage Folders tab to add one.</p>
           )}

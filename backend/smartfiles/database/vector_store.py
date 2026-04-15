@@ -113,6 +113,39 @@ class ChromaVectorStore:
 
         return hits
 
+    def get_embeddings_for_ids(self, ids: List[str]) -> Dict[str, List[float]]:
+        """Return a mapping from document ID to its stored embedding.
+
+        This is intended for diagnostics and experimental scoring
+        strategies; it is not on the hot path for large batch
+        operations.
+        """
+
+        if not ids:
+            return {}
+
+        result = self._collection.get(ids=ids, include=["embeddings"])  # type: ignore[attr-defined]
+        out: Dict[str, List[float]] = {}
+
+        raw_ids = result.get("ids") or []
+        raw_embs = result.get("embeddings") or []
+
+        # Chroma may return flat lists (``[id1, id2, ...]``) or
+        # nested lists (``[[id1, id2, ...]]``) depending on version
+        # and configuration. Normalize to simple parallel lists.
+        if isinstance(raw_ids, list) and raw_ids and isinstance(raw_ids[0], list):
+            raw_ids = raw_ids[0]
+        if isinstance(raw_embs, list) and raw_embs and isinstance(raw_embs[0], list) and len(raw_embs) == 1:
+            raw_embs = raw_embs[0]
+
+        for _id, emb in zip(raw_ids, raw_embs):
+            if _id is None or emb is None:
+                continue
+            # Each ``emb`` is expected to be a 1D sequence of floats.
+            out[str(_id)] = list(emb)
+
+        return out
+
 
 def get_default_vector_store(*, recreate: bool = False) -> ChromaVectorStore:
     store = ChromaVectorStore(db_path=DEFAULT_DB_DIR)

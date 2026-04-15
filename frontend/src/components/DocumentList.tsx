@@ -10,6 +10,7 @@ export type DocumentListProps = {
   selectedIndex: number | null
   onSelectedIndexChange: (index: number | null) => void
   searchError: string | null
+  isSearching: boolean
 }
 
 export default function DocumentList({
@@ -17,6 +18,7 @@ export default function DocumentList({
   selectedIndex,
   onSelectedIndexChange,
   searchError,
+  isSearching,
 }: DocumentListProps) {
   const listRef = useRef<HTMLUListElement | null>(null)
 
@@ -31,8 +33,11 @@ export default function DocumentList({
   return (
     <section className="panel list-panel">
       <h2>Documents</h2>
-      {results.length === 0 && !searchError && (
+      {results.length === 0 && !searchError && !isSearching && (
         <p className="muted">No results yet. Try a query above.</p>
+      )}
+      {results.length === 0 && isSearching && (
+        <p className="helper-text small">Searching… fetching results and computing scores.</p>
       )}
 
       <div
@@ -87,6 +92,23 @@ export default function DocumentList({
                       {result.rerank_score.toFixed(1)}
                     </span>
                   )}
+                </div>
+                <div className="result-scores-row">
+                  <span className="result-score-variant">
+                    base: {result.score.toFixed(1)}
+                  </span>
+                  <span className="result-score-variant">
+                    -20%: {result.score_drop20 != null ? result.score_drop20.toFixed(1) : '–'}
+                  </span>
+                  <span className="result-score-variant">
+                    -40%: {result.score_drop40 != null ? result.score_drop40.toFixed(1) : '–'}
+                  </span>
+                  <span className="result-score-variant">
+                    -60%: {result.score_drop60 != null ? result.score_drop60.toFixed(1) : '–'}
+                  </span>
+                  <span className="result-score-variant">
+                    -80%: {result.score_drop80 != null ? result.score_drop80.toFixed(1) : '–'}
+                  </span>
                 </div>
                 {result.filepath && (
                   <div className="result-meta">

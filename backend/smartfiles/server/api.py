@@ -85,6 +85,10 @@ class SearchResponse(BaseModel):
     id: str
     text: str
     score: float
+    score_drop20: Optional[float] = None
+    score_drop40: Optional[float] = None
+    score_drop60: Optional[float] = None
+    score_drop80: Optional[float] = None
     filepath: Optional[str] = None
     chunk_index: Optional[int] = None
     page_start: Optional[int] = None
