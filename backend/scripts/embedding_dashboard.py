@@ -321,10 +321,25 @@ def main() -> None:
         st.info("No embeddings available to compute norms.")
 
     # Header with inline help toggle for per-dimension stats.
-    hdr_dims = st.columns([4, 1])
+    hdr_dims = st.columns([4, 3, 1])
     with hdr_dims[0]:
-        st.subheader("Per-dimension statistics (top-variance dimensions)")
+        st.subheader("Per-dimension statistics")
     with hdr_dims[1]:
+        # Sorting controls for the per-dimension table.
+        sort_col = st.selectbox(
+            "Sort by",
+            options=["variance", "std", "mean", "dim"],
+            index=0,
+            key="dims_sort_col",
+        )
+        sort_dir = st.radio(
+            "Direction",
+            options=["descending", "ascending"],
+            index=0,
+            horizontal=True,
+            key="dims_sort_dir",
+        )
+    with hdr_dims[2]:
         if st.button("[?]", key="btn_help_dims"):
             st.session_state["active_help_section"] = toggle_help(
                 st.session_state.get("active_help_section", ""), "dims"
@@ -335,19 +350,22 @@ def main() -> None:
     var: np.ndarray = stats["var"]
     mean: np.ndarray = stats["mean"]
     std: np.ndarray = stats["std"]
-    order: np.ndarray = stats["sorted_dims"]
 
-    top_k = 32
-    top_dims = order[:top_k]
+    # Build a full per-dimension table (one row per embedding dimension).
+    dim_indices = np.arange(len(var))
     df_dims = pd.DataFrame(
         {
-            "dim": top_dims,
-            "variance": var[top_dims],
-            "std": std[top_dims],
-            "mean": mean[top_dims],
+            "dim": dim_indices,
+            "variance": var,
+            "std": std,
+            "mean": mean,
         }
     )
-    st.dataframe(df_dims, use_container_width=True)
+
+    ascending = sort_dir == "ascending"
+    df_dims_sorted = df_dims.sort_values(by=sort_col, ascending=ascending).reset_index(drop=True)
+
+    st.dataframe(df_dims_sorted, use_container_width=True)
 
     # Header with inline help toggle for PCA.
     hdr_pca = st.columns([4, 1])
