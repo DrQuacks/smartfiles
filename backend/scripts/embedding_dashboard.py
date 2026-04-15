@@ -195,6 +195,17 @@ def compute_pca(embeddings: np.ndarray, n_components: int = 2) -> Tuple[np.ndarr
     return projected, explained
 
 
+def toggle_help(current: str, section: str) -> str:
+    """Pure helper for help toggle state.
+
+    Returns the new active section name given the current one and the
+    section that was clicked. Clicking the same section twice clears it;
+    clicking a different one switches focus.
+    """
+
+    return "" if current == section else section
+
+
 def main() -> None:
     st.set_page_config(page_title="SmartFiles Embedding Explorer", layout="wide")
     st.title("SmartFiles Embedding Explorer")
@@ -205,15 +216,10 @@ def main() -> None:
     st.caption(f"Data directory: {data_dir}")
     st.caption(f"Chroma DB path: {db_dir}")
 
-    # Initialize sidebar tooltip state.
-    for key in [
-        "show_help_sampling",
-        "show_help_norms",
-        "show_help_dims",
-        "show_help_pca",
-    ]:
-        if key not in st.session_state:
-            st.session_state[key] = False
+    # Initialize a single active help section identifier so that at
+    # most one tooltip is open at a time.
+    if "active_help_section" not in st.session_state:
+        st.session_state["active_help_section"] = ""
 
     try:
         client, collection = get_collection()
@@ -250,15 +256,57 @@ def main() -> None:
         with row[0]:
             st.caption("What does sampling control?")
         with row[1]:
-            label = "[?]" if not st.session_state["show_help_sampling"] else "[close]"
+            is_active_sampling = st.session_state.get("active_help_section", "") == "sampling"
+            label = "[?]" if not is_active_sampling else "[close]"
             if st.button(label, key="btn_help_sampling"):
-                st.session_state["show_help_sampling"] = not st.session_state["show_help_sampling"]
-        if st.session_state["show_help_sampling"]:
+                st.session_state["active_help_section"] = toggle_help(
+                    st.session_state.get("active_help_section", ""), "sampling"
+                )
+        if is_active_sampling:
             st.info(
                 "Sampling controls how many embeddings we pull from the index "
                 "for analysis. Larger samples give more stable statistics but "
                 "take longer to compute. This does not change your SmartFiles "
                 "index; it only affects this dashboard's estimates."
+            )
+
+        # Centralized section help: text lives in the sidebar, while
+        # the toggles live next to the main section headers.
+        st.markdown("---")
+        st.header("Section help")
+
+        active = st.session_state.get("active_help_section", "")
+
+        if active == "norms":
+            st.subheader("Vector norm distribution")
+            st.info(
+                "This histogram shows the L2 length (norm) of each sampled "
+                "embedding. If almost all norms cluster around a single value, "
+                "it suggests the encoder (or cosine normalization) is keeping "
+                "vectors at nearly constant length. A wider spread means some "
+                "documents get much larger or smaller magnitudes than others."
+            )
+
+        if active == "dims":
+            st.subheader("Per-dimension statistics (top-variance dimensions)")
+            st.info(
+                "The table lists the embedding dimensions with the largest "
+                "variance across your sampled documents. High-variance "
+                "dimensions are where the encoder is spreading points out; "
+                "low-variance ones behave more like a shared background. "
+                "Means near zero suggest a roughly centered dimension; large "
+                "means indicate a persistent bias in that direction."
+            )
+
+        if active == "pca":
+            st.subheader("PCA projection (2D)")
+            st.info(
+                "PCA finds the directions of greatest variance in the "
+                "sampled embeddings and projects them into 2D for plotting. "
+                "Each point is a document chunk; proximity in this plot "
+                "reflects similarity along those top components only. The "
+                "explained variance ratios tell you how much of the total "
+                "spread is captured by PC1 and PC2."
             )
 
     cols = st.columns(3)
@@ -287,17 +335,14 @@ def main() -> None:
     with hdr_norms[0]:
         st.subheader("Vector norm distribution")
     with hdr_norms[1]:
-        label_norms = "[?]" if not st.session_state["show_help_norms"] else "[close]"
+        is_active_norms = st.session_state.get("active_help_section", "") == "norms"
+        label_norms = "[?]" if not is_active_norms else "[close]"
         if st.button(label_norms, key="btn_help_norms_main"):
-            st.session_state["show_help_norms"] = not st.session_state["show_help_norms"]
-    if st.session_state["show_help_norms"]:
-        st.info(
-            "This histogram shows the L2 length (norm) of each sampled "
-            "embedding. If almost all norms cluster around a single value, "
-            "it suggests the encoder (or cosine normalization) is keeping "
-            "vectors at nearly constant length. A wider spread means some "
-            "documents get much larger or smaller magnitudes than others."
-        )
+            st.session_state["active_help_section"] = toggle_help(
+                st.session_state.get("active_help_section", ""), "norms"
+            )
+    # Toggle lives next to the header; explanatory text is rendered in
+    # the sidebar's "Section help" area.
 
     norms: np.ndarray = stats["norms"]
     # Histogram for norms.
@@ -321,18 +366,14 @@ def main() -> None:
     with hdr_dims[0]:
         st.subheader("Per-dimension statistics (top-variance dimensions)")
     with hdr_dims[1]:
-        label_dims = "[?]" if not st.session_state["show_help_dims"] else "[close]"
+        is_active_dims = st.session_state.get("active_help_section", "") == "dims"
+        label_dims = "[?]" if not is_active_dims else "[close]"
         if st.button(label_dims, key="btn_help_dims_main"):
-            st.session_state["show_help_dims"] = not st.session_state["show_help_dims"]
-    if st.session_state["show_help_dims"]:
-        st.info(
-            "The table lists the embedding dimensions with the largest "
-            "variance across your sampled documents. High-variance "
-            "dimensions are where the encoder is spreading points out; "
-            "low-variance ones behave more like a shared background. "
-            "Means near zero suggest a roughly centered dimension; large "
-            "means indicate a persistent bias in that direction."
-        )
+            st.session_state["active_help_section"] = toggle_help(
+                st.session_state.get("active_help_section", ""), "dims"
+            )
+    # Toggle lives next to the header; explanatory text is rendered in
+    # the sidebar's "Section help" area.
 
     var: np.ndarray = stats["var"]
     mean: np.ndarray = stats["mean"]
@@ -356,18 +397,14 @@ def main() -> None:
     with hdr_pca[0]:
         st.subheader("PCA projection (2D)")
     with hdr_pca[1]:
-        label_pca = "[?]" if not st.session_state["show_help_pca"] else "[close]"
+        is_active_pca = st.session_state.get("active_help_section", "") == "pca"
+        label_pca = "[?]" if not is_active_pca else "[close]"
         if st.button(label_pca, key="btn_help_pca_main"):
-            st.session_state["show_help_pca"] = not st.session_state["show_help_pca"]
-    if st.session_state["show_help_pca"]:
-        st.info(
-            "PCA finds the directions of greatest variance in the "
-            "sampled embeddings and projects them into 2D for plotting. "
-            "Each point is a document chunk; proximity in this plot "
-            "reflects similarity along those top components only. The "
-            "explained variance ratios tell you how much of the total "
-            "spread is captured by PC1 and PC2."
-        )
+            st.session_state["active_help_section"] = toggle_help(
+                st.session_state.get("active_help_section", ""), "pca"
+            )
+    # Toggle lives next to the header; explanatory text is rendered in
+    # the sidebar's "Section help" area.
 
     try:
         projected, explained = compute_pca(embeddings, n_components=2)
