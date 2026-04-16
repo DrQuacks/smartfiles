@@ -569,11 +569,13 @@ def main() -> None:
     # Attach simple metadata for visualization.
     filepaths: List[str] = []
     folders: List[str] = []
+    source_labels: List[str] = []
     for meta in metadatas:
         if not isinstance(meta, dict):
             meta = {}
         path_str = str(meta.get("filepath") or "")
         filepaths.append(path_str)
+        source_labels.append(str(meta.get("source_label") or "selected-source"))
         if path_str:
             p = Path(path_str)
             folders.append(p.parent.name)
@@ -586,6 +588,7 @@ def main() -> None:
             "pc2": pc2,
             "filepath": filepaths,
             "folder": folders,
+            "source_label": source_labels,
         }
     )
 
@@ -595,10 +598,12 @@ def main() -> None:
         f"{explained[0]:.4f}, {explained[1]:.4f}."
     )
 
-    color_by = st.selectbox("Color points by", ["folder", "none"], index=0)
+    color_by = st.selectbox("Color points by", ["folder", "source_label", "none"], index=0)
 
     if color_by == "folder":
         st.scatter_chart(df_pca, x="pc1", y="pc2", color="folder")
+    elif color_by == "source_label":
+        st.scatter_chart(df_pca, x="pc1", y="pc2", color="source_label")
     else:
         st.scatter_chart(df_pca, x="pc1", y="pc2")
 
