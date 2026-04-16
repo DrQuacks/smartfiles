@@ -248,6 +248,75 @@ def discover_embedding_sources(data_dir: Path, default_db_dir: Path, default_col
     return sources
 
 
+def _load_single_source_embeddings(
+    db_dir: Path,
+    collection_name: str,
+    sample_limit: int,
+) -> Tuple[np.ndarray, List[Dict[str, Any]], int | None]:
+    """Load sampled embeddings for one collection."""
+
+    _client, collection = get_collection(db_dir, collection_name)
+    try:
+        total_count = int(collection.count())
+    except Exception:
+        total_count = None
+
+    peek_result = peek_embeddings(collection, limit=sample_limit)
+    embeddings, metadatas = extract_embedding_matrix(peek_result)
+    return embeddings, metadatas, total_count
+
+
+def _load_beir_mix_embeddings(
+    selected_sources: List[Dict[str, str]],
+    sample_limit: int,
+) -> Tuple[np.ndarray, List[Dict[str, Any]], int | None]:
+    """Load and concatenate sampled embeddings from multiple BEIR collections."""
+
+    if not selected_sources:
+        raise RuntimeError("No BEIR datasets selected")
+
+    per_source = max(1, sample_limit // len(selected_sources))
+    remainder = sample_limit - (per_source * len(selected_sources))
+
+    parts: List[np.ndarray] = []
+    all_meta: List[Dict[str, Any]] = []
+    total_count_sum = 0
+    total_known = True
+
+    target_dim: int | None = None
+    for idx, src in enumerate(selected_sources):
+        db_dir = Path(src["db_path"]).expanduser().resolve()
+        collection_name = src["collection"]
+        label = src["label"]
+
+        this_limit = per_source + (1 if idx < remainder else 0)
+        emb, meta, total_count = _load_single_source_embeddings(db_dir, collection_name, this_limit)
+
+        if target_dim is None:
+            target_dim = int(emb.shape[1])
+        elif int(emb.shape[1]) != target_dim:
+            raise RuntimeError(
+                f"Dimension mismatch across selected sources: expected {target_dim}, got {emb.shape[1]} for {label}"
+            )
+
+        for m in meta:
+            out = dict(m) if isinstance(m, dict) else {}
+            out["source_label"] = label
+            all_meta.append(out)
+
+        parts.append(emb)
+        if total_count is None:
+            total_known = False
+        else:
+            total_count_sum += int(total_count)
+
+    if not parts:
+        raise RuntimeError("No embeddings loaded from selected BEIR datasets")
+
+    stacked = np.vstack(parts)
+    return stacked, all_meta, (total_count_sum if total_known else None)
+
+
 def main() -> None:
     st.set_page_config(page_title="SmartFiles Embedding Explorer", layout="wide")
     st.title("SmartFiles Embedding Explorer")
@@ -261,51 +330,67 @@ def main() -> None:
     default_collection = col_env or DEFAULT_COLLECTION_NAME
 
     preset_sources = discover_embedding_sources(data_dir, default_db_dir, default_collection)
+    beir_sources = [s for s in preset_sources if s["label"].startswith("BEIR: ")]
+
+    data_mode = "single"
+    selected_beir_labels: List[str] = []
+    db_dir = default_db_dir
+    collection_name = default_collection
 
     with st.sidebar:
         st.header("Data Source")
-        selected_idx = st.selectbox(
-            "Preset source",
-            options=list(range(len(preset_sources))),
-            format_func=lambda i: preset_sources[i]["label"],
+        data_mode = st.radio(
+            "Source mode",
+            options=["Single source", "BEIR mix"],
             index=0,
         )
 
-        preset = preset_sources[selected_idx]
-        use_manual_override = st.checkbox("Manual override", value=False)
+        if data_mode == "Single source":
+            selected_idx = st.selectbox(
+                "Preset source",
+                options=list(range(len(preset_sources))),
+                format_func=lambda i: preset_sources[i]["label"],
+                index=0,
+            )
 
-        if use_manual_override:
-            db_dir_input = st.text_input("Chroma DB path", value=preset["db_path"])
-            collection_name = st.text_input("Collection name", value=preset["collection"])
+            preset = preset_sources[selected_idx]
+            use_manual_override = st.checkbox("Manual override", value=False)
+
+            if use_manual_override:
+                db_dir_input = st.text_input("Chroma DB path", value=preset["db_path"])
+                collection_name = st.text_input("Collection name", value=preset["collection"])
+            else:
+                db_dir_input = preset["db_path"]
+                collection_name = preset["collection"]
+
+            db_dir = Path(db_dir_input).expanduser().resolve()
         else:
-            db_dir_input = preset["db_path"]
-            collection_name = preset["collection"]
+            beir_labels = [s["label"] for s in beir_sources]
+            selected_beir_labels = st.multiselect(
+                "BEIR datasets",
+                options=beir_labels,
+                default=beir_labels[: min(3, len(beir_labels))],
+            )
+            if not beir_sources:
+                st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
 
-        if len(preset_sources) == 1:
+        if len(preset_sources) == 1 and data_mode == "Single source":
             st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
 
-    db_dir = Path(db_dir_input).expanduser().resolve()
-
     st.caption(f"Data directory: {data_dir}")
-    st.caption(f"Chroma DB path: {db_dir}")
-    st.caption(f"Collection: {collection_name}")
+    if data_mode == "Single source":
+        st.caption(f"Chroma DB path: {db_dir}")
+        st.caption(f"Collection: {collection_name}")
+    else:
+        selected_text = ", ".join(selected_beir_labels) if selected_beir_labels else "(none)"
+        st.caption(f"BEIR mix sources: {selected_text}")
 
     # Initialize a single active help section identifier so that at
     # most one tooltip is open at a time.
     if "active_help_section" not in st.session_state:
         st.session_state["active_help_section"] = ""
 
-    try:
-        client, collection = get_collection(db_dir, collection_name)
-    except Exception as exc:  # pragma: no cover - UI-only
-        st.error(f"Failed to open Chroma collection: {exc}")
-        return
-
-    # High-level info.
-    try:
-        total_count = collection.count()
-    except Exception:
-        total_count = None
+    total_count: int | None = None
 
     with st.sidebar:
         st.header("Sampling")
@@ -344,16 +429,24 @@ def main() -> None:
                 "index; it only affects this dashboard's estimates."
             )
 
-    cols = st.columns(3)
-    with cols[0]:
-        st.metric("Total indexed vectors", value=str(total_count) if total_count is not None else "unknown")
-    with cols[1]:
-        st.metric("Sample size", value=str(sample_limit))
-
     # Fetch sample.
     try:
-        peek_result = peek_embeddings(collection, limit=sample_limit)
-        embeddings, metadatas = extract_embedding_matrix(peek_result)
+        if data_mode == "Single source":
+            embeddings, metadatas, total_count = _load_single_source_embeddings(
+                db_dir=db_dir,
+                collection_name=collection_name,
+                sample_limit=sample_limit,
+            )
+        else:
+            if not selected_beir_labels:
+                st.error("Select at least one BEIR dataset in BEIR mix mode.")
+                return
+            source_map = {s["label"]: s for s in beir_sources}
+            selected_sources = [source_map[label] for label in selected_beir_labels if label in source_map]
+            embeddings, metadatas, total_count = _load_beir_mix_embeddings(
+                selected_sources=selected_sources,
+                sample_limit=sample_limit,
+            )
     except Exception as exc:  # pragma: no cover - UI-only
         st.error(f"Failed to load embeddings from Chroma: {exc}")
         return
@@ -362,6 +455,11 @@ def main() -> None:
     n_samples = stats["n_samples"]
     dim = stats["dim"]
 
+    cols = st.columns(3)
+    with cols[0]:
+        st.metric("Total indexed vectors", value=str(total_count) if total_count is not None else "unknown")
+    with cols[1]:
+        st.metric("Sample size", value=str(sample_limit))
     with cols[2]:
         st.metric("Embedding dimension", value=str(dim))
 
