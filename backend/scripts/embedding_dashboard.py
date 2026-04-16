@@ -23,6 +23,7 @@ benchmark dashboard but focused on the embedding space itself.
 """
 
 import math
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -36,16 +37,16 @@ from smartfiles.config import get_data_dir
 from smartfiles.database.vector_store import DEFAULT_COLLECTION_NAME, DEFAULT_DB_DIR
 
 
-def get_collection() -> Tuple[chromadb.ClientAPI, Any]:
+def get_collection(db_path: Path, collection_name: str) -> Tuple[chromadb.ClientAPI, Any]:
     """Return a Chroma client and the SmartFiles documents collection.
 
     This mirrors the configuration used by ``ChromaVectorStore`` so we
     are looking at the exact same index that the app uses.
     """
 
-    db_path = DEFAULT_DB_DIR.expanduser().resolve()
+    db_path = db_path.expanduser().resolve()
     client = chromadb.PersistentClient(path=str(db_path), settings=Settings())
-    collection = client.get_collection(name=DEFAULT_COLLECTION_NAME)
+    collection = client.get_collection(name=collection_name)
     return client, collection
 
 
@@ -210,15 +211,84 @@ def toggle_help(current: str, section: str) -> str:
     return "" if current == section else section
 
 
+def discover_embedding_sources(data_dir: Path, default_db_dir: Path, default_collection: str) -> List[Dict[str, str]]:
+    """Discover preset embedding sources for the dashboard.
+
+    Includes:
+    - local SmartFiles index (documents collection)
+    - BEIR dataset indexes under SMARTFILES_DATA_DIR/benchmarks/beir/*/database
+    """
+
+    sources: List[Dict[str, str]] = [
+        {
+            "label": "Local SmartFiles",
+            "db_path": str(default_db_dir.expanduser().resolve()),
+            "collection": default_collection,
+        }
+    ]
+
+    beir_root = (data_dir / "benchmarks" / "beir").expanduser().resolve()
+    if not beir_root.exists() or not beir_root.is_dir():
+        return sources
+
+    dataset_dirs = sorted([p for p in beir_root.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
+    for ds_dir in dataset_dirs:
+        db_dir = ds_dir / "database"
+        if not db_dir.exists() or not db_dir.is_dir():
+            continue
+        dataset = ds_dir.name
+        sources.append(
+            {
+                "label": f"BEIR: {dataset}",
+                "db_path": str(db_dir.expanduser().resolve()),
+                "collection": f"beir-{dataset}",
+            }
+        )
+
+    return sources
+
+
 def main() -> None:
     st.set_page_config(page_title="SmartFiles Embedding Explorer", layout="wide")
     st.title("SmartFiles Embedding Explorer")
 
     data_dir = get_data_dir()
-    db_dir = DEFAULT_DB_DIR
+
+    db_env = os.getenv("SMARTFILES_EMBEDDING_EXPLORER_DB_PATH", "").strip()
+    col_env = os.getenv("SMARTFILES_EMBEDDING_EXPLORER_COLLECTION", "").strip()
+
+    default_db_dir = Path(db_env).expanduser().resolve() if db_env else DEFAULT_DB_DIR
+    default_collection = col_env or DEFAULT_COLLECTION_NAME
+
+    preset_sources = discover_embedding_sources(data_dir, default_db_dir, default_collection)
+
+    with st.sidebar:
+        st.header("Data Source")
+        selected_idx = st.selectbox(
+            "Preset source",
+            options=list(range(len(preset_sources))),
+            format_func=lambda i: preset_sources[i]["label"],
+            index=0,
+        )
+
+        preset = preset_sources[selected_idx]
+        use_manual_override = st.checkbox("Manual override", value=False)
+
+        if use_manual_override:
+            db_dir_input = st.text_input("Chroma DB path", value=preset["db_path"])
+            collection_name = st.text_input("Collection name", value=preset["collection"])
+        else:
+            db_dir_input = preset["db_path"]
+            collection_name = preset["collection"]
+
+        if len(preset_sources) == 1:
+            st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
+
+    db_dir = Path(db_dir_input).expanduser().resolve()
 
     st.caption(f"Data directory: {data_dir}")
     st.caption(f"Chroma DB path: {db_dir}")
+    st.caption(f"Collection: {collection_name}")
 
     # Initialize a single active help section identifier so that at
     # most one tooltip is open at a time.
@@ -226,7 +296,7 @@ def main() -> None:
         st.session_state["active_help_section"] = ""
 
     try:
-        client, collection = get_collection()
+        client, collection = get_collection(db_dir, collection_name)
     except Exception as exc:  # pragma: no cover - UI-only
         st.error(f"Failed to open Chroma collection: {exc}")
         return

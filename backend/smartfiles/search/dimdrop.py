@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -88,6 +89,38 @@ def compute_global_dim_order(store: "ChromaVectorStore", max_sample: int = 2000)
 
     std = matrix.std(axis=0)
     return np.argsort(std ** 2)  # ascending variance
+
+
+def load_dim_order_from_file(file_path: str | Path) -> Optional[np.ndarray]:
+    """Load a previously saved dim-order array from disk.
+
+    Expects a 1D NumPy array of integer dimension indices.
+    Returns ``None`` if loading fails or content is invalid.
+    """
+
+    path = Path(file_path).expanduser().resolve()
+    if not path.exists():
+        return None
+
+    try:
+        arr = np.load(path)
+    except Exception:
+        return None
+
+    if not isinstance(arr, np.ndarray):
+        return None
+    if arr.ndim != 1:
+        return None
+
+    try:
+        arr = arr.astype(np.int64, copy=False)
+    except Exception:
+        return None
+
+    if arr.shape[0] == 0:
+        return None
+
+    return arr
 
 
 def add_dimdrop_similarity_scores(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,8 +22,10 @@ from smartfiles.search.dimdrop import (
     add_dimdrop_similarity_scores,
     compute_global_dim_order,
     dimdrop_field_for_fraction,
+    load_dim_order_from_file,
 )
 from smartfiles.search.reranker import rerank
+from smartfiles.config import get_data_dir
 from smartfiles.folder_registry import (
     FolderEntry,
     delete_folder_by_name,
@@ -51,6 +54,7 @@ class AppState:
     vector_store: Optional[ChromaVectorStore] = None
     global_dim_order: Optional[object] = None  # numpy ndarray, typed as object to avoid import
     _dim_order_ready: bool = False  # sentinel: avoids ambiguous numpy bool check
+    dim_order_source: Optional[str] = None
 
 
 state = AppState()
@@ -65,6 +69,31 @@ def startup_event() -> None:
 
     state.embedder = get_default_embedding_model()
     state.vector_store = get_default_vector_store(recreate=False)
+
+
+def _resolve_dimdrop_mask_path() -> Optional[Path]:
+    """Resolve configured dim-drop mask path from environment.
+
+    Priority:
+    1) SMARTFILES_DIMDROP_MASK_PATH: explicit .npy file
+    2) SMARTFILES_DIMDROP_BEIR_DATASET: standard BEIR artifact location
+    """
+
+    explicit = os.getenv("SMARTFILES_DIMDROP_MASK_PATH", "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+
+    dataset = os.getenv("SMARTFILES_DIMDROP_BEIR_DATASET", "").strip()
+    if dataset:
+        return (
+            get_data_dir()
+            / "benchmarks"
+            / "beir"
+            / dataset
+            / "dimdrop_dim_order.npy"
+        ).expanduser().resolve()
+
+    return None
 
 
 class ExtractRequest(BaseModel):
@@ -428,14 +457,32 @@ def api_search_dimdrop(payload: DimdropRequest) -> list[DimdropResult]:
     # Build (and cache) the global dim-order from the full corpus once.
     # This ensures variance is computed over all documents, not just the
     # top-k retrieved results, giving a stable mask across all queries.
-    if not state._dim_order_ready and state.vector_store is not None:
-        print("[dimdrop] computing global dim-order from corpus…", flush=True)
-        state.global_dim_order = compute_global_dim_order(state.vector_store)
+    if not state._dim_order_ready:
+        configured_mask_path = _resolve_dimdrop_mask_path()
+        if configured_mask_path is not None:
+            loaded = load_dim_order_from_file(configured_mask_path)
+            if loaded is not None:
+                state.global_dim_order = loaded
+                state.dim_order_source = f"file:{configured_mask_path}"
+                print(
+                    f"[dimdrop] loaded dim-order from {configured_mask_path}",
+                    flush=True,
+                )
+
+        if state.global_dim_order is None and state.vector_store is not None:
+            print("[dimdrop] computing global dim-order from local corpus…", flush=True)
+            state.global_dim_order = compute_global_dim_order(state.vector_store)
+            state.dim_order_source = "local-corpus"
+
         state._dim_order_ready = True
         if state.global_dim_order is not None:
             import numpy as _np
             arr = state.global_dim_order  # type: ignore[assignment]
-            print(f"[dimdrop] global dim-order ready ({_np.asarray(arr).shape[0]} dims)", flush=True)
+            source = state.dim_order_source or "unknown"
+            print(
+                f"[dimdrop] global dim-order ready ({_np.asarray(arr).shape[0]} dims) source={source}",
+                flush=True,
+            )
         else:
             print("[dimdrop] corpus empty – falling back to per-result variance", flush=True)
 

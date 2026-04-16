@@ -252,5 +252,69 @@ def debug_scores(
         )
 
 
+    @app.command("build-dimdrop-mask-beir")
+    def build_dimdrop_mask_beir(
+        dataset: str = typer.Argument(..., help="BEIR dataset name, e.g. 'scifact'"),
+        split: str = typer.Option(
+            "test",
+            "--split",
+            help="Dataset split used when indexing the BEIR corpus",
+        ),
+        sample_size: int = typer.Option(
+            2000,
+            "--sample-size",
+            help="Number of BEIR embeddings sampled to estimate dim variances",
+        ),
+        batch_size: int = typer.Option(
+            128,
+            "--batch-size",
+            help="Batch size used when (re)indexing the BEIR corpus",
+        ),
+        reindex: bool = typer.Option(
+            False,
+            "--reindex",
+            help="Rebuild BEIR index before computing dim-order mask",
+        ),
+        output: str = typer.Option(
+            "",
+            "--output",
+            help="Optional output path for dimdrop_dim_order.npy",
+        ),
+    ):
+        """Build a BEIR-based dim-drop mask artifact (.npy).
+
+        The generated mask can be consumed by the API via either:
+        - SMARTFILES_DIMDROP_MASK_PATH=<absolute path>, or
+        - SMARTFILES_DIMDROP_BEIR_DATASET=<dataset name>
+        """
+
+        try:
+            from pathlib import Path
+            from smartfiles.benchmarks.dimdrop_mask import build_beir_dimdrop_mask
+        except Exception as exc:  # pragma: no cover
+            typer.echo(
+                "Error: Unable to import dim-drop mask builder.",
+                err=True,
+            )
+            raise typer.Exit(code=1) from exc
+
+        output_path = Path(output.strip()).expanduser().resolve() if output.strip() else None
+
+        try:
+            npy_path, _meta_path = build_beir_dimdrop_mask(
+                dataset=dataset,
+                split=split,
+                sample_size=sample_size,
+                batch_size=batch_size,
+                reindex=reindex,
+                output_path=output_path,
+            )
+            typer.echo(f"Built dim-drop mask: {npy_path}")
+            typer.echo(f"Set SMARTFILES_DIMDROP_MASK_PATH={npy_path} to use it in API")
+        except Exception as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
