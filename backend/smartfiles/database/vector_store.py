@@ -147,6 +147,34 @@ class ChromaVectorStore:
         return out
 
 
+    def get_all_embeddings_sample(self, max_n: int = 5000) -> List[List[float]]:
+        """Return up to *max_n* stored embeddings sampled from the collection.
+
+        Embeddings are fetched directly from Chroma (no re-embedding).
+        Used to build a stable, corpus-wide variance estimate for dim-drop.
+        """
+
+        count = self._collection.count()
+        if count == 0:
+            return []
+
+        # Chroma's ``peek`` is limited to small N.  Use ``get`` with a
+        # controlled limit instead; we don't need specific IDs.
+        limit = min(max_n, count)
+        result = self._collection.get(limit=limit, include=["embeddings"])  # type: ignore[call-arg]
+
+        raw_embs = result.get("embeddings") or []
+        # Normalise the occasional nested-list shape that Chroma returns.
+        if raw_embs and isinstance(raw_embs[0], list) and len(raw_embs) == 1:
+            raw_embs = raw_embs[0]
+
+        out: List[List[float]] = []
+        for emb in raw_embs:
+            if emb is not None:
+                out.append(list(emb))
+        return out
+
+
 def get_default_vector_store(*, recreate: bool = False) -> ChromaVectorStore:
     store = ChromaVectorStore(db_path=DEFAULT_DB_DIR)
     if recreate:

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from smartfiles.embeddings.embedding_model import EmbeddingModel
+
+if TYPE_CHECKING:
+    from smartfiles.database.vector_store import ChromaVectorStore
 
 
 _DEBUG_DIMDROP = os.getenv("SMARTFILES_DEBUG_DIMDROP", "").lower() in {"1", "true", "yes"}
@@ -56,12 +59,44 @@ def _build_drop_masks(dim_order_asc: np.ndarray, dim: int, drop_fractions: Seque
     return masks
 
 
+def compute_global_dim_order(store: "ChromaVectorStore", max_sample: int = 2000) -> Optional[np.ndarray]:
+    """Return dimension indices sorted by ascending variance over a corpus sample.
+
+    Fetches up to *max_sample* stored embeddings directly from Chroma
+    (no re-embedding) and computes per-dimension standard deviation across
+    that population.  The result is a stable, query-independent ordering
+    that can be cached and reused across all dim-drop calls.
+
+    Returns ``None`` if the store is empty or embeddings cannot be fetched.
+    
+    Note: Reduced default max_sample to 2000 to avoid hanging on large corpora
+    on first request. Variance is still computed over a representative sample.
+    """
+
+    try:
+        raw = store.get_all_embeddings_sample(max_n=max_sample)
+    except Exception as e:
+        print(f"[dimdrop] failed to fetch corpus sample: {e}", flush=True)
+        return None
+        
+    if not raw:
+        return None
+
+    matrix = np.asarray(raw, dtype=np.float32)
+    if matrix.ndim != 2 or matrix.shape[0] < 2:
+        return None
+
+    std = matrix.std(axis=0)
+    return np.argsort(std ** 2)  # ascending variance
+
+
 def add_dimdrop_similarity_scores(
     *,
     embedder: EmbeddingModel,
     query_embedding: Sequence[float],
     results: List[Dict[str, Any]],
     drop_fractions: Iterable[float] = (0.5, 0.75, 0.9, 0.95),
+    dim_order_asc: Optional[np.ndarray] = None,
 ) -> None:
     """Augment results with similarity scores under dim-drop variants.
 
@@ -114,12 +149,12 @@ def add_dimdrop_similarity_scores(
     if q.shape[0] != dim:
         return
 
-    std = docs.std(axis=0)
-    var = std ** 2
+    # Use the pre-computed global dim order when available; fall back to
+    # computing variance over the retrieved set only as a last resort.
+    if dim_order_asc is None or not isinstance(dim_order_asc, np.ndarray) or dim_order_asc.shape[0] != dim:
+        std = docs.std(axis=0)
+        dim_order_asc = np.argsort(std ** 2)
 
-    # Dimensions ordered by increasing variance (lowest first) within
-    # this retrieved set.
-    dim_order_asc = np.argsort(var)
     masks = _build_drop_masks(dim_order_asc, dim=dim, drop_fractions=drop_fracs)
 
     # Precompute masked query vectors and norms for each fraction.

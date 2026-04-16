@@ -17,7 +17,11 @@ from smartfiles.ingestion.indexer import (
     index_progress,
 )
 from smartfiles.search.search_engine import run_search
-from smartfiles.search.dimdrop import add_dimdrop_similarity_scores, dimdrop_field_for_fraction
+from smartfiles.search.dimdrop import (
+    add_dimdrop_similarity_scores,
+    compute_global_dim_order,
+    dimdrop_field_for_fraction,
+)
 from smartfiles.search.reranker import rerank
 from smartfiles.folder_registry import (
     FolderEntry,
@@ -45,6 +49,8 @@ app.add_middleware(
 class AppState:
     embedder: Optional[EmbeddingModel] = None
     vector_store: Optional[ChromaVectorStore] = None
+    global_dim_order: Optional[object] = None  # numpy ndarray, typed as object to avoid import
+    _dim_order_ready: bool = False  # sentinel: avoids ambiguous numpy bool check
 
 
 state = AppState()
@@ -419,13 +425,30 @@ def api_search_dimdrop(payload: DimdropRequest) -> list[DimdropResult]:
         for r in payload.results
     ]
 
+    # Build (and cache) the global dim-order from the full corpus once.
+    # This ensures variance is computed over all documents, not just the
+    # top-k retrieved results, giving a stable mask across all queries.
+    if not state._dim_order_ready and state.vector_store is not None:
+        print("[dimdrop] computing global dim-order from corpus…", flush=True)
+        state.global_dim_order = compute_global_dim_order(state.vector_store)
+        state._dim_order_ready = True
+        if state.global_dim_order is not None:
+            import numpy as _np
+            arr = state.global_dim_order  # type: ignore[assignment]
+            print(f"[dimdrop] global dim-order ready ({_np.asarray(arr).shape[0]} dims)", flush=True)
+        else:
+            print("[dimdrop] corpus empty – falling back to per-result variance", flush=True)
+
+    print(f"[dimdrop] scoring {len(items)} items at drop_fraction={payload.drop_fraction}", flush=True)
     query_embedding = state.embedder.embed_texts([payload.query])[0]
     add_dimdrop_similarity_scores(
         embedder=state.embedder,
         query_embedding=query_embedding,
         results=items,
         drop_fractions=[payload.drop_fraction],
+        dim_order_asc=state.global_dim_order,  # type: ignore[arg-type]
     )
+    print(f"[dimdrop] done drop_fraction={payload.drop_fraction}", flush=True)
 
     out: list[DimdropResult] = []
     for item in items:
