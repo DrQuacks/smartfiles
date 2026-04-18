@@ -153,6 +153,7 @@ def _sample_hf_dataset_texts(
     spec: str,
     max_texts: int,
     seed: int,
+    max_scan_examples: int = 20000,
 ) -> list[str]:
     try:
         load_dataset = importlib.import_module("datasets").load_dataset
@@ -165,22 +166,29 @@ def _sample_hf_dataset_texts(
     repo_id, config, split, text_field = _parse_hf_spec(spec)
     dataset = load_dataset(repo_id, name=config, split=split, streaming=True)
 
-    try:
-        buffer_size = max(1000, min(10000, max_texts * 10))
-        dataset = dataset.shuffle(seed=seed, buffer_size=buffer_size)
-    except Exception:
-        pass
+    rng = random.Random(seed)
+    reservoir: list[str] = []
+    seen_valid = 0
 
-    texts: list[str] = []
-    for example in dataset:
-        value = example.get(text_field)
-        text = str(value).strip() if value is not None else ""
-        if text:
-            texts.append(text)
-        if len(texts) >= max_texts:
+    for index, example in enumerate(dataset):
+        if index >= max_scan_examples:
             break
 
-    return texts
+        value = example.get(text_field)
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            continue
+
+        seen_valid += 1
+        if len(reservoir) < max_texts:
+            reservoir.append(text)
+            continue
+
+        replace_idx = rng.randint(0, seen_valid - 1)
+        if replace_idx < max_texts:
+            reservoir[replace_idx] = text
+
+    return reservoir
 
 
 def _dedupe_texts(texts: Iterable[str]) -> list[str]:
@@ -295,6 +303,7 @@ def build_mixed_sampled_dimdrop_mask(
     include_registered_local: bool = False,
     beir_split: str = "test",
     per_source_sample_size: int = 500,
+    hf_max_scan_examples: int = 20000,
     batch_size: int = 128,
     seed: int = 13,
     embedder: EmbeddingModel | None = None,
@@ -367,6 +376,7 @@ def build_mixed_sampled_dimdrop_mask(
                 spec=value,
                 max_texts=per_source_sample_size,
                 seed=source_seed,
+                max_scan_examples=hf_max_scan_examples,
             )
             source_name = f"hf:{value}"
         elif kind == "local":
@@ -411,6 +421,7 @@ def build_mixed_sampled_dimdrop_mask(
         "include_registered_local": bool(include_registered_local),
         "beir_split": beir_split,
         "per_source_sample_size": int(per_source_sample_size),
+        "hf_max_scan_examples": int(hf_max_scan_examples),
         "raw_total_sample_count": int(len(all_texts)),
         "deduped_total_sample_count": int(matrix.shape[0]),
         "dim_count": int(matrix.shape[1]),

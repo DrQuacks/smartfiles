@@ -44,6 +44,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--include-registered-local", action="store_true")
     parser.add_argument("--beir-split", default="test")
     parser.add_argument("--per-source-sample-size", type=int, default=500)
+    parser.add_argument("--hf-max-scan-examples", type=int, default=20000)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--label", default="")
@@ -62,6 +63,7 @@ def main() -> None:
         include_registered_local=args.include_registered_local,
         beir_split=args.beir_split,
         per_source_sample_size=args.per_source_sample_size,
+        hf_max_scan_examples=args.hf_max_scan_examples,
         batch_size=args.batch_size,
         seed=args.seed,
         output_path=output_path,

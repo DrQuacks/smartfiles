@@ -424,6 +424,11 @@ def debug_scores(
             "--per-source-sample-size",
             help="Maximum raw documents sampled per source before embedding",
         ),
+        hf_max_scan_examples: int = typer.Option(
+            20000,
+            "--hf-max-scan-examples",
+            help="Maximum streaming rows scanned per HF source (caps download/work)",
+        ),
         batch_size: int = typer.Option(
             128,
             "--batch-size",
@@ -472,6 +477,7 @@ def debug_scores(
                 include_registered_local=include_registered_local,
                 beir_split=beir_split,
                 per_source_sample_size=per_source_sample_size,
+                hf_max_scan_examples=hf_max_scan_examples,
                 batch_size=batch_size,
                 seed=seed,
                 output_path=output_path,
