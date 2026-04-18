@@ -23,7 +23,9 @@ benchmark dashboard but focused on the embedding space itself.
 """
 
 import math
+import importlib
 import os
+import random
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -34,7 +36,10 @@ import streamlit as st
 from chromadb.config import Settings
 
 from smartfiles.config import get_data_dir
+from smartfiles.database.text_store import iter_corpus_documents
 from smartfiles.database.vector_store import DEFAULT_COLLECTION_NAME, DEFAULT_DB_DIR
+from smartfiles.embeddings.embedding_model import get_default_embedding_model
+from smartfiles.folder_registry import list_folders
 
 
 def get_collection(db_path: Path, collection_name: str) -> Tuple[chromadb.ClientAPI, Any]:
@@ -317,6 +322,192 @@ def _load_beir_mix_embeddings(
     return stacked, all_meta, (total_count_sum if total_known else None)
 
 
+def _sample_local_corpus_texts(root_folder: Path, max_texts: int, seed: int) -> List[str]:
+    texts: List[str] = []
+    for _path, text in iter_corpus_documents(root_folder):
+        value = text.strip()
+        if value:
+            texts.append(value)
+
+    if len(texts) <= max_texts:
+        return texts
+
+    rng = random.Random(seed)
+    idx = rng.sample(range(len(texts)), k=max_texts)
+    return [texts[i] for i in idx]
+
+
+def _sample_beir_raw_texts(dataset: str, split: str, max_texts: int, seed: int) -> List[str]:
+    try:
+        from smartfiles.benchmarks.beir_runner import _download_and_load_beir
+    except Exception as exc:  # pragma: no cover - optional dependency path
+        raise RuntimeError(
+            "BEIR sampling requires benchmark dependencies. Run `pip install .[benchmark]`."
+        ) from exc
+
+    corpus, _queries, _qrels = _download_and_load_beir(dataset, split)
+
+    texts: List[str] = []
+    for fields in corpus.values():
+        title = str((fields.get("title") or "")).strip()
+        body = str((fields.get("text") or "")).strip()
+        combined = (title + "\n" + body).strip() if title or body else ""
+        if combined:
+            texts.append(combined)
+
+    if len(texts) <= max_texts:
+        return texts
+
+    rng = random.Random(seed)
+    idx = rng.sample(range(len(texts)), k=max_texts)
+    return [texts[i] for i in idx]
+
+
+def _parse_hf_spec(spec: str) -> Tuple[str, str | None, str, str]:
+    parts = [part.strip() for part in spec.split("::")]
+    repo_id = parts[0] if parts else ""
+    if not repo_id:
+        raise ValueError(f"Invalid HF dataset spec: {spec!r}")
+
+    config = parts[1] or None if len(parts) > 1 else None
+    split = parts[2] or "train" if len(parts) > 2 else "train"
+    text_field = parts[3] or "text" if len(parts) > 3 else "text"
+    return repo_id, config, split, text_field
+
+
+def _sample_hf_streaming_texts(
+    spec: str,
+    max_texts: int,
+    seed: int,
+    max_scan_examples: int,
+) -> List[str]:
+    try:
+        load_dataset = importlib.import_module("datasets").load_dataset
+    except Exception as exc:  # pragma: no cover - optional dependency path
+        raise RuntimeError(
+            "HF streaming sampling requires `datasets`. Run `pip install .[benchmark]`."
+        ) from exc
+
+    repo_id, config, split, text_field = _parse_hf_spec(spec)
+    ds = load_dataset(repo_id, name=config, split=split, streaming=True)
+
+    rng = random.Random(seed)
+    reservoir: List[str] = []
+    seen_valid = 0
+
+    for row_idx, row in enumerate(ds):
+        if row_idx >= max_scan_examples:
+            break
+        value = row.get(text_field)
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            continue
+
+        seen_valid += 1
+        if len(reservoir) < max_texts:
+            reservoir.append(text)
+            continue
+
+        replace_idx = rng.randint(0, seen_valid - 1)
+        if replace_idx < max_texts:
+            reservoir[replace_idx] = text
+
+    return reservoir
+
+
+def _load_raw_mix_embeddings(
+    *,
+    local_paths: List[Path],
+    beir_datasets: List[str],
+    hf_specs: List[str],
+    beir_split: str,
+    per_source_sample_size: int,
+    hf_max_scan_examples: int,
+    batch_size: int,
+    seed: int,
+    progress_callback=None,
+) -> Tuple[np.ndarray, List[Dict[str, Any]], int | None]:
+    source_texts: List[Tuple[str, str]] = []
+    source_cursor = 0
+
+    total_sources = len(local_paths) + len(beir_datasets) + len(hf_specs)
+    processed_sources = 0
+
+    def _report_sampling(message: str) -> None:
+        if progress_callback is not None:
+            progress_callback("sampling", processed_sources, total_sources, message)
+
+    for local_path in local_paths:
+        texts = _sample_local_corpus_texts(local_path, per_source_sample_size, seed + source_cursor)
+        source_cursor += 1
+        processed_sources += 1
+        source_label = f"local:{local_path.name}"
+        source_texts.extend((text, source_label) for text in texts)
+        _report_sampling(f"Sampled {len(texts)} texts from {source_label}")
+
+    for dataset in beir_datasets:
+        texts = _sample_beir_raw_texts(dataset, beir_split, per_source_sample_size, seed + source_cursor)
+        source_cursor += 1
+        processed_sources += 1
+        source_label = f"beir:{dataset}"
+        source_texts.extend((text, source_label) for text in texts)
+        _report_sampling(f"Sampled {len(texts)} texts from {source_label}")
+
+    for spec in hf_specs:
+        texts = _sample_hf_streaming_texts(
+            spec,
+            max_texts=per_source_sample_size,
+            seed=seed + source_cursor,
+            max_scan_examples=hf_max_scan_examples,
+        )
+        source_cursor += 1
+        processed_sources += 1
+        source_label = f"hf:{spec}"
+        source_texts.extend((text, source_label) for text in texts)
+        _report_sampling(f"Sampled {len(texts)} texts from {source_label}")
+
+    if not source_texts:
+        raise RuntimeError("No raw sources selected")
+
+    # Exact-text dedupe while preserving first source attribution.
+    deduped: List[Tuple[str, str]] = []
+    seen_texts = set()
+    for text, src in source_texts:
+        if text in seen_texts:
+            continue
+        seen_texts.add(text)
+        deduped.append((text, src))
+
+    if len(deduped) < 2:
+        raise RuntimeError("Need at least two sampled texts to analyze embeddings")
+
+    embedder = get_default_embedding_model()
+
+    vectors: List[List[float]] = []
+    metas: List[Dict[str, Any]] = []
+    total_batches = max(1, math.ceil(len(deduped) / batch_size))
+    for start in range(0, len(deduped), batch_size):
+        batch = deduped[start : start + batch_size]
+        batch_texts = [item[0] for item in batch]
+        batch_src = [item[1] for item in batch]
+        vectors.extend(embedder.embed_texts(batch_texts))
+        for src in batch_src:
+            metas.append({"filepath": "", "source_label": src})
+        if progress_callback is not None:
+            batch_idx = (start // batch_size) + 1
+            progress_callback(
+                "embedding",
+                batch_idx,
+                total_batches,
+                f"Embedded batch {batch_idx}/{total_batches}",
+            )
+
+    arr = np.asarray(vectors, dtype=np.float32)
+    if arr.ndim != 2:
+        raise RuntimeError(f"Unexpected raw-mix embedding shape: {arr.shape!r}")
+    return arr, metas, int(arr.shape[0])
+
+
 def main() -> None:
     st.set_page_config(page_title="SmartFiles Embedding Explorer", layout="wide")
     st.title("SmartFiles Embedding Explorer")
@@ -334,14 +525,34 @@ def main() -> None:
 
     data_mode = "single"
     selected_beir_labels: List[str] = []
+    selected_raw_local_labels: List[str] = []
+    selected_raw_beir: List[str] = []
+    selected_raw_hf: List[str] = []
+    raw_beir_split = "test"
+    raw_per_source_sample_size = 300
+    raw_hf_max_scan_examples = 5000
+    raw_embed_batch_size = 128
+    raw_seed = 13
     db_dir = default_db_dir
     collection_name = default_collection
 
+    registered_locals = list_folders()
+    local_label_to_path: Dict[str, Path] = {
+        f"{entry.folder_name} ({entry.path})": Path(entry.path).expanduser().resolve()
+        for entry in registered_locals
+    }
+    beir_dataset_names = sorted([src["label"].replace("BEIR: ", "") for src in beir_sources])
+    hf_default_specs = [
+        "fancyzhx/ag_news",
+        "google/wiki40b::en::train::text",
+    ]
+
     with st.sidebar:
         st.header("Data Source")
+        st.caption("Adjust settings, then click **Run Analysis** to refresh results.")
         data_mode = st.radio(
             "Source mode",
-            options=["Single source", "BEIR mix"],
+            options=["Single source", "BEIR mix", "Raw mixed sample (no index)"],
             index=0,
         )
 
@@ -365,14 +576,62 @@ def main() -> None:
 
             db_dir = Path(db_dir_input).expanduser().resolve()
         else:
-            beir_labels = [s["label"] for s in beir_sources]
-            selected_beir_labels = st.multiselect(
-                "BEIR datasets",
-                options=beir_labels,
-                default=beir_labels[: min(3, len(beir_labels))],
-            )
-            if not beir_sources:
-                st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
+            if data_mode == "BEIR mix":
+                beir_labels = [s["label"] for s in beir_sources]
+                selected_beir_labels = st.multiselect(
+                    "BEIR datasets",
+                    options=beir_labels,
+                    default=beir_labels[: min(3, len(beir_labels))],
+                )
+                if not beir_sources:
+                    st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
+            else:
+                st.caption(
+                    "Raw mixed sample mode embeds sampled texts directly from local/BEIR/HF sources "
+                    "without indexing into Chroma."
+                )
+
+                selected_raw_local_labels = st.multiselect(
+                    "Local sources (registered folders)",
+                    options=list(local_label_to_path.keys()),
+                    default=list(local_label_to_path.keys())[:1],
+                )
+
+                selected_raw_beir = st.multiselect(
+                    "BEIR raw datasets",
+                    options=beir_dataset_names,
+                    default=beir_dataset_names[: min(2, len(beir_dataset_names))],
+                )
+
+                selected_raw_hf = st.multiselect(
+                    "HF streaming datasets",
+                    options=hf_default_specs,
+                    default=hf_default_specs,
+                )
+
+                raw_beir_split = st.selectbox("BEIR split", options=["test", "dev", "train"], index=0)
+                raw_per_source_sample_size = st.slider(
+                    "Raw sample size per source",
+                    min_value=50,
+                    max_value=2000,
+                    value=300,
+                    step=50,
+                )
+                raw_hf_max_scan_examples = st.slider(
+                    "HF max scanned rows per source",
+                    min_value=500,
+                    max_value=50000,
+                    value=5000,
+                    step=500,
+                )
+                raw_embed_batch_size = st.slider(
+                    "Embedding batch size (raw mode)",
+                    min_value=16,
+                    max_value=512,
+                    value=128,
+                    step=16,
+                )
+                raw_seed = st.number_input("Random seed", value=13, min_value=0, max_value=10_000)
 
         if len(preset_sources) == 1 and data_mode == "Single source":
             st.caption("No BEIR datasets auto-detected yet. Build one to see it here.")
@@ -381,9 +640,16 @@ def main() -> None:
     if data_mode == "Single source":
         st.caption(f"Chroma DB path: {db_dir}")
         st.caption(f"Collection: {collection_name}")
-    else:
+    elif data_mode == "BEIR mix":
         selected_text = ", ".join(selected_beir_labels) if selected_beir_labels else "(none)"
         st.caption(f"BEIR mix sources: {selected_text}")
+    else:
+        local_text = ", ".join(selected_raw_local_labels) if selected_raw_local_labels else "(none)"
+        beir_text = ", ".join(selected_raw_beir) if selected_raw_beir else "(none)"
+        hf_text = ", ".join(selected_raw_hf) if selected_raw_hf else "(none)"
+        st.caption(f"Raw local sources: {local_text}")
+        st.caption(f"Raw BEIR sources: {beir_text}")
+        st.caption(f"Raw HF sources: {hf_text}")
 
     # Initialize a single active help section identifier so that at
     # most one tooltip is open at a time.
@@ -404,11 +670,17 @@ def main() -> None:
             step=100,
         )
 
-        st.caption(
-            "Embeddings are sampled using Chroma's `peek` API. "
-            "This is not a truly random sample but is sufficient "
-            "for geometric diagnostics."
-        )
+        if data_mode == "Raw mixed sample (no index)":
+            st.caption(
+                "In raw mixed mode, this limit is ignored. Use the raw-mode controls above "
+                "to choose per-source sample size."
+            )
+        else:
+            st.caption(
+                "Embeddings are sampled using Chroma's `peek` API. "
+                "This is not a truly random sample but is sufficient "
+                "for geometric diagnostics."
+            )
 
         # Inline tooltip toggle for the sampling section. Always shows
         # a single `[?]` button and uses the sidebar text to indicate
@@ -429,27 +701,117 @@ def main() -> None:
                 "index; it only affects this dashboard's estimates."
             )
 
-    # Fetch sample.
-    try:
-        if data_mode == "Single source":
-            embeddings, metadatas, total_count = _load_single_source_embeddings(
-                db_dir=db_dir,
-                collection_name=collection_name,
-                sample_limit=sample_limit,
-            )
-        else:
-            if not selected_beir_labels:
-                st.error("Select at least one BEIR dataset in BEIR mix mode.")
-                return
-            source_map = {s["label"]: s for s in beir_sources}
-            selected_sources = [source_map[label] for label in selected_beir_labels if label in source_map]
-            embeddings, metadatas, total_count = _load_beir_mix_embeddings(
-                selected_sources=selected_sources,
-                sample_limit=sample_limit,
-            )
-    except Exception as exc:  # pragma: no cover - UI-only
-        st.error(f"Failed to load embeddings from Chroma: {exc}")
+    current_run_config: Dict[str, Any] = {
+        "data_mode": data_mode,
+        "db_dir": str(db_dir),
+        "collection_name": collection_name,
+        "sample_limit": int(sample_limit),
+        "selected_beir_labels": selected_beir_labels,
+        "selected_raw_local_labels": selected_raw_local_labels,
+        "selected_raw_beir": selected_raw_beir,
+        "selected_raw_hf": selected_raw_hf,
+        "raw_beir_split": raw_beir_split,
+        "raw_per_source_sample_size": int(raw_per_source_sample_size),
+        "raw_hf_max_scan_examples": int(raw_hf_max_scan_examples),
+        "raw_embed_batch_size": int(raw_embed_batch_size),
+        "raw_seed": int(raw_seed),
+    }
+
+    with st.sidebar:
+        run_clicked = st.button("Run Analysis", type="primary", use_container_width=True)
+
+    has_previous_run = all(
+        key in st.session_state
+        for key in [
+            "embedding_dashboard_last_run_config",
+            "embedding_dashboard_embeddings",
+            "embedding_dashboard_metadatas",
+            "embedding_dashboard_total_count",
+        ]
+    )
+
+    if run_clicked:
+        progress = st.progress(0.0)
+        progress_msg = st.empty()
+
+        def _raw_progress(stage: str, current: int, total: int, message: str) -> None:
+            safe_total = max(1, int(total))
+            ratio = float(current) / float(safe_total)
+            ratio = min(max(ratio, 0.0), 1.0)
+            if stage == "sampling":
+                overall = 0.5 * ratio
+            elif stage == "embedding":
+                overall = 0.5 + (0.5 * ratio)
+            else:
+                overall = ratio
+            progress.progress(overall)
+            progress_msg.info(message)
+
+        try:
+            if data_mode == "Single source":
+                with st.spinner("Loading indexed embeddings from Chroma..."):
+                    embeddings, metadatas, total_count = _load_single_source_embeddings(
+                        db_dir=db_dir,
+                        collection_name=collection_name,
+                        sample_limit=sample_limit,
+                    )
+            elif data_mode == "BEIR mix":
+                if not selected_beir_labels:
+                    st.error("Select at least one BEIR dataset in BEIR mix mode.")
+                    return
+                source_map = {s["label"]: s for s in beir_sources}
+                selected_sources = [source_map[label] for label in selected_beir_labels if label in source_map]
+                with st.spinner("Loading BEIR mix embeddings from indexed collections..."):
+                    embeddings, metadatas, total_count = _load_beir_mix_embeddings(
+                        selected_sources=selected_sources,
+                        sample_limit=sample_limit,
+                    )
+            else:
+                local_paths = [
+                    local_label_to_path[label]
+                    for label in selected_raw_local_labels
+                    if label in local_label_to_path
+                ]
+                if not local_paths and not selected_raw_beir and not selected_raw_hf:
+                    st.error("Select at least one source in Raw mixed sample mode.")
+                    return
+
+                progress_msg.info("Starting raw mixed sampling...")
+                embeddings, metadatas, total_count = _load_raw_mix_embeddings(
+                    local_paths=local_paths,
+                    beir_datasets=selected_raw_beir,
+                    hf_specs=selected_raw_hf,
+                    beir_split=raw_beir_split,
+                    per_source_sample_size=raw_per_source_sample_size,
+                    hf_max_scan_examples=int(raw_hf_max_scan_examples),
+                    batch_size=int(raw_embed_batch_size),
+                    seed=int(raw_seed),
+                    progress_callback=_raw_progress,
+                )
+
+            progress.progress(1.0)
+            progress_msg.success("Run complete.")
+
+            st.session_state["embedding_dashboard_last_run_config"] = current_run_config
+            st.session_state["embedding_dashboard_embeddings"] = embeddings
+            st.session_state["embedding_dashboard_metadatas"] = metadatas
+            st.session_state["embedding_dashboard_total_count"] = total_count
+        except Exception as exc:  # pragma: no cover - UI-only
+            st.error(f"Failed to load embeddings: {exc}")
+            return
+
+    if not has_previous_run and not run_clicked:
+        st.info("Set your sources and click **Run Analysis**.")
         return
+
+    if has_previous_run and not run_clicked:
+        last_run_config = st.session_state.get("embedding_dashboard_last_run_config", {})
+        if current_run_config != last_run_config:
+            st.warning("Settings changed. Click **Run Analysis** to refresh results.")
+
+    embeddings = st.session_state["embedding_dashboard_embeddings"]
+    metadatas = st.session_state["embedding_dashboard_metadatas"]
+    total_count = st.session_state["embedding_dashboard_total_count"]
 
     stats = compute_basic_stats(embeddings)
     n_samples = stats["n_samples"]
