@@ -316,5 +316,173 @@ def debug_scores(
             raise typer.Exit(code=1) from exc
 
 
+    @app.command("build-dimdrop-mask-beir-sampled")
+    def build_dimdrop_mask_beir_sampled(
+        datasets: str = typer.Argument(
+            ...,
+            help="Comma-separated BEIR datasets, e.g. 'scifact,nfcorpus,fiqa,trec-covid'",
+        ),
+        split: str = typer.Option(
+            "test",
+            "--split",
+            help="Dataset split used when sampling raw BEIR texts",
+        ),
+        per_dataset_sample_size: int = typer.Option(
+            500,
+            "--per-dataset-sample-size",
+            help="Maximum raw documents sampled per dataset before embedding",
+        ),
+        batch_size: int = typer.Option(
+            128,
+            "--batch-size",
+            help="Embedding batch size used while building the mask",
+        ),
+        seed: int = typer.Option(
+            13,
+            "--seed",
+            help="Random seed used for dataset sampling",
+        ),
+        label: str = typer.Option(
+            "",
+            "--label",
+            help="Optional label used for the output artifact directory",
+        ),
+        output: str = typer.Option(
+            "",
+            "--output",
+            help="Optional explicit output path for dimdrop_dim_order.npy",
+        ),
+    ):
+        """Build a BEIR-based dim-drop mask from sampled raw texts only.
+
+        This avoids indexing whole datasets into Chroma. It is the
+        recommended workflow for exploratory variance masks.
+        """
+
+        try:
+            from pathlib import Path
+            from smartfiles.benchmarks.dimdrop_mask import build_beir_sampled_dimdrop_mask
+        except Exception as exc:  # pragma: no cover
+            typer.echo(
+                "Error: Unable to import sampled dim-drop mask builder.",
+                err=True,
+            )
+            raise typer.Exit(code=1) from exc
+
+        dataset_list = [d.strip() for d in datasets.split(",") if d.strip()]
+        output_path = Path(output.strip()).expanduser().resolve() if output.strip() else None
+
+        try:
+            npy_path, _meta_path = build_beir_sampled_dimdrop_mask(
+                datasets=dataset_list,
+                split=split,
+                per_dataset_sample_size=per_dataset_sample_size,
+                batch_size=batch_size,
+                seed=seed,
+                output_path=output_path,
+                label=label.strip() or None,
+            )
+            typer.echo(f"Built sampled dim-drop mask: {npy_path}")
+            typer.echo(f"Set SMARTFILES_DIMDROP_MASK_PATH={npy_path} to use it in API")
+        except Exception as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+
+    @app.command("build-dimdrop-mask-mixed-sampled")
+    def build_dimdrop_mask_mixed_sampled(
+        beir: list[str] = typer.Option(
+            [],
+            "--beir",
+            help="Repeatable BEIR dataset name to sample from, e.g. --beir fiqa --beir nfcorpus",
+        ),
+        hf: list[str] = typer.Option(
+            [],
+            "--hf",
+            help=(
+                "Repeatable Hugging Face dataset spec using repo_id::config::split::text_field, "
+                "e.g. --hf fancyzhx/ag_news --hf google/wiki40b::en::train::text"
+            ),
+        ),
+        local: list[str] = typer.Option(
+            [],
+            "--local",
+            help="Repeatable local root folder whose extracted raw-text corpus should be sampled",
+        ),
+        include_registered_local: bool = typer.Option(
+            False,
+            "--include-registered-local",
+            help="Also sample from all folders in the SmartFiles registry",
+        ),
+        beir_split: str = typer.Option(
+            "test",
+            "--beir-split",
+            help="Split used when sampling raw BEIR texts",
+        ),
+        per_source_sample_size: int = typer.Option(
+            500,
+            "--per-source-sample-size",
+            help="Maximum raw documents sampled per source before embedding",
+        ),
+        batch_size: int = typer.Option(
+            128,
+            "--batch-size",
+            help="Embedding batch size used while building the mask",
+        ),
+        seed: int = typer.Option(
+            13,
+            "--seed",
+            help="Random seed used for source sampling",
+        ),
+        label: str = typer.Option(
+            "",
+            "--label",
+            help="Optional label used for the output artifact directory",
+        ),
+        output: str = typer.Option(
+            "",
+            "--output",
+            help="Optional explicit output path for dimdrop_dim_order.npy",
+        ),
+    ):
+        """Build a mixed dim-drop mask from local, BEIR, and HF raw texts.
+
+        This avoids Chroma indexing completely and is the preferred way
+        to bootstrap a broader mask corpus after the failed full-index
+        approach.
+        """
+
+        try:
+            from pathlib import Path
+            from smartfiles.benchmarks.dimdrop_mask import build_mixed_sampled_dimdrop_mask
+        except Exception as exc:  # pragma: no cover
+            typer.echo(
+                "Error: Unable to import mixed sampled dim-drop mask builder.",
+                err=True,
+            )
+            raise typer.Exit(code=1) from exc
+
+        output_path = Path(output.strip()).expanduser().resolve() if output.strip() else None
+
+        try:
+            npy_path, _meta_path = build_mixed_sampled_dimdrop_mask(
+                beir_datasets=beir,
+                hf_datasets=hf,
+                local_folders=local,
+                include_registered_local=include_registered_local,
+                beir_split=beir_split,
+                per_source_sample_size=per_source_sample_size,
+                batch_size=batch_size,
+                seed=seed,
+                output_path=output_path,
+                label=label.strip() or None,
+            )
+            typer.echo(f"Built mixed sampled dim-drop mask: {npy_path}")
+            typer.echo(f"Set SMARTFILES_DIMDROP_MASK_PATH={npy_path} to use it in API")
+        except Exception as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
