@@ -972,6 +972,56 @@ def main() -> None:
     with st.expander("Raw PCA sample (first 200 rows)"):
         st.dataframe(df_pca.head(200), use_container_width=True)
 
+    st.subheader("PCA projection (lowest-variance dimensions)")
+    if dim < 2:
+        st.info("Need at least 2 embedding dimensions for low-variance PCA.")
+    else:
+        default_low_k = min(128, dim)
+        min_low_k = 2 if dim <= 8 else 8
+        low_k = st.slider(
+            "Number of lowest-variance dimensions to keep",
+            min_value=min_low_k,
+            max_value=dim,
+            value=max(min_low_k, default_low_k),
+            step=1,
+            key="low_var_pca_k",
+        )
+
+        low_var_order = np.argsort(var)[:low_k]
+        low_var_embeddings = embeddings[:, low_var_order]
+
+        try:
+            low_projected, low_explained = compute_pca(low_var_embeddings, n_components=2)
+        except Exception as exc:  # pragma: no cover - UI-only
+            st.error(f"Failed to compute low-variance PCA: {exc}")
+            return
+
+        df_low_pca = pd.DataFrame(
+            {
+                "pc1": low_projected[:, 0],
+                "pc2": low_projected[:, 1],
+                "filepath": filepaths,
+                "folder": folders,
+                "source_label": source_labels,
+            }
+        )
+
+        st.caption(
+            "This PCA is computed after restricting each embedding to the "
+            f"{low_k} lowest-variance dimensions. Explained variance ratios "
+            f"for PC1/PC2: {low_explained[0]:.4f}, {low_explained[1]:.4f}."
+        )
+
+        if color_by == "folder":
+            st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="folder")
+        elif color_by == "source_label":
+            st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="source_label")
+        else:
+            st.scatter_chart(df_low_pca, x="pc1", y="pc2")
+
+        with st.expander("Raw low-variance PCA sample (first 200 rows)"):
+            st.dataframe(df_low_pca.head(200), use_container_width=True)
+
     # Render section help and debug state *after* all buttons have had
     # a chance to update active_help_section in this run.
     with st.sidebar:
