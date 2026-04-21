@@ -205,6 +205,63 @@ def compute_pca(embeddings: np.ndarray, n_components: int = 2) -> Tuple[np.ndarr
     return projected, explained
 
 
+def compute_sampled_pairwise_distance_correlation(
+    full_embeddings: np.ndarray,
+    low_embeddings: np.ndarray,
+    *,
+    max_pairs: int = 12000,
+    seed: int = 13,
+) -> Tuple[float, int]:
+    """Estimate correlation between pairwise distances in two spaces.
+
+    Distances are sampled over index pairs to keep runtime bounded.
+    Returns ``(corr, pairs_used)`` where ``corr`` is Pearson
+    correlation between sampled pairwise L2 distances.
+    """
+
+    if full_embeddings.shape[0] != low_embeddings.shape[0]:
+        raise ValueError("full_embeddings and low_embeddings must have same number of rows")
+
+    n = int(full_embeddings.shape[0])
+    if n < 2:
+        return float("nan"), 0
+
+    total_pairs = n * (n - 1) // 2
+    pairs_to_use = min(int(max_pairs), total_pairs)
+    if pairs_to_use <= 0:
+        return float("nan"), 0
+
+    rng = random.Random(seed)
+
+    if total_pairs <= pairs_to_use:
+        pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
+    else:
+        pairs_set: set[Tuple[int, int]] = set()
+        while len(pairs_set) < pairs_to_use:
+            i = rng.randrange(n)
+            j = rng.randrange(n)
+            if i == j:
+                continue
+            a, b = (i, j) if i < j else (j, i)
+            pairs_set.add((a, b))
+        pairs = list(pairs_set)
+
+    full_dists = np.empty(len(pairs), dtype=np.float32)
+    low_dists = np.empty(len(pairs), dtype=np.float32)
+
+    for idx, (i, j) in enumerate(pairs):
+        full_dists[idx] = float(np.linalg.norm(full_embeddings[i] - full_embeddings[j]))
+        low_dists[idx] = float(np.linalg.norm(low_embeddings[i] - low_embeddings[j]))
+
+    full_std = float(full_dists.std())
+    low_std = float(low_dists.std())
+    if full_std == 0.0 or low_std == 0.0:
+        return float("nan"), len(pairs)
+
+    corr = float(np.corrcoef(full_dists, low_dists)[0, 1])
+    return corr, len(pairs)
+
+
 def toggle_help(current: str, section: str) -> str:
     """Pure helper for help toggle state.
 
@@ -962,38 +1019,62 @@ def main() -> None:
 
     color_by = st.selectbox("Color points by", ["folder", "source_label", "none"], index=0)
 
-    if color_by == "folder":
-        st.scatter_chart(df_pca, x="pc1", y="pc2", color="folder")
-    elif color_by == "source_label":
-        st.scatter_chart(df_pca, x="pc1", y="pc2", color="source_label")
-    else:
-        st.scatter_chart(df_pca, x="pc1", y="pc2")
-
-    with st.expander("Raw PCA sample (first 200 rows)"):
-        st.dataframe(df_pca.head(200), use_container_width=True)
-
-    st.subheader("PCA projection (lowest-variance dimensions)")
+    st.subheader("PCA comparison: full vs low/high variance dims")
     if dim < 2:
-        st.info("Need at least 2 embedding dimensions for low-variance PCA.")
+        st.info("Need at least 2 embedding dimensions for PCA comparison.")
     else:
-        default_low_k = min(128, dim)
-        min_low_k = 2 if dim <= 8 else 8
-        low_k = st.slider(
-            "Number of lowest-variance dimensions to keep",
-            min_value=min_low_k,
-            max_value=dim,
-            value=max(min_low_k, default_low_k),
-            step=1,
-            key="low_var_pca_k",
-        )
+        control_cols = st.columns(4)
+        with control_cols[0]:
+            default_low_k = min(128, dim)
+            min_low_k = 2 if dim <= 8 else 8
+            low_k = st.slider(
+                "Lowest-variance dimensions to keep",
+                min_value=min_low_k,
+                max_value=dim,
+                value=max(min_low_k, default_low_k),
+                step=1,
+                key="low_var_pca_k",
+            )
+        with control_cols[1]:
+            default_high_k = min(128, dim)
+            min_high_k = 2 if dim <= 8 else 8
+            high_k = st.slider(
+                "Highest-variance dimensions to keep",
+                min_value=min_high_k,
+                max_value=dim,
+                value=max(min_high_k, default_high_k),
+                step=1,
+                key="high_var_pca_k",
+            )
+        with control_cols[2]:
+            pair_sample_size = st.slider(
+                "Distance-correlation pair sample",
+                min_value=500,
+                max_value=30000,
+                value=12000,
+                step=500,
+                key="pair_corr_sample_size",
+            )
+        with control_cols[3]:
+            pair_seed = st.number_input(
+                "Distance-correlation seed",
+                min_value=0,
+                max_value=100000,
+                value=13,
+                step=1,
+                key="pair_corr_seed",
+            )
 
         low_var_order = np.argsort(var)[:low_k]
         low_var_embeddings = embeddings[:, low_var_order]
+        high_var_order = np.argsort(var)[::-1][:high_k]
+        high_var_embeddings = embeddings[:, high_var_order]
 
         try:
             low_projected, low_explained = compute_pca(low_var_embeddings, n_components=2)
+            high_projected, high_explained = compute_pca(high_var_embeddings, n_components=2)
         except Exception as exc:  # pragma: no cover - UI-only
-            st.error(f"Failed to compute low-variance PCA: {exc}")
+            st.error(f"Failed to compute low/high-variance PCA: {exc}")
             return
 
         df_low_pca = pd.DataFrame(
@@ -1006,21 +1087,106 @@ def main() -> None:
             }
         )
 
-        st.caption(
-            "This PCA is computed after restricting each embedding to the "
-            f"{low_k} lowest-variance dimensions. Explained variance ratios "
-            f"for PC1/PC2: {low_explained[0]:.4f}, {low_explained[1]:.4f}."
+        df_high_pca = pd.DataFrame(
+            {
+                "pc1": high_projected[:, 0],
+                "pc2": high_projected[:, 1],
+                "filepath": filepaths,
+                "folder": folders,
+                "source_label": source_labels,
+            }
         )
 
-        if color_by == "folder":
-            st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="folder")
-        elif color_by == "source_label":
-            st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="source_label")
-        else:
-            st.scatter_chart(df_low_pca, x="pc1", y="pc2")
+        corr_low, pairs_used_low = compute_sampled_pairwise_distance_correlation(
+            embeddings,
+            low_var_embeddings,
+            max_pairs=int(pair_sample_size),
+            seed=int(pair_seed),
+        )
+        corr_high, pairs_used_high = compute_sampled_pairwise_distance_correlation(
+            embeddings,
+            high_var_embeddings,
+            max_pairs=int(pair_sample_size),
+            seed=int(pair_seed) + 1,
+        )
 
-        with st.expander("Raw low-variance PCA sample (first 200 rows)"):
-            st.dataframe(df_low_pca.head(200), use_container_width=True)
+        metric_cols = st.columns(5)
+        with metric_cols[0]:
+            st.metric("Low-variance dims kept", value=str(low_k))
+        with metric_cols[1]:
+            st.metric("High-variance dims kept", value=str(high_k))
+        with metric_cols[2]:
+            corr_low_label = "n/a" if np.isnan(corr_low) else f"{corr_low:.4f}"
+            st.metric("Distance corr (full vs low-var)", value=corr_low_label)
+        with metric_cols[3]:
+            corr_high_label = "n/a" if np.isnan(corr_high) else f"{corr_high:.4f}"
+            st.metric("Distance corr (full vs high-var)", value=corr_high_label)
+        with metric_cols[4]:
+            st.metric("Pairs sampled", value=str(min(pairs_used_low, pairs_used_high)))
+
+        st.caption(
+            "Distance correlation compares sampled pairwise L2 distances in the full embedding space "
+            "against low-variance-only and high-variance-only subspaces. Higher values mean that subspace "
+            "preserves global geometry more closely."
+        )
+
+        compare_cols = st.columns(2)
+        with compare_cols[0]:
+            st.markdown("**Full-space PCA (reference)**")
+            if color_by == "folder":
+                st.scatter_chart(df_pca, x="pc1", y="pc2", color="folder")
+            elif color_by == "source_label":
+                st.scatter_chart(df_pca, x="pc1", y="pc2", color="source_label")
+            else:
+                st.scatter_chart(df_pca, x="pc1", y="pc2")
+            st.caption(f"Explained variance (PC1/PC2): {explained[0]:.4f}, {explained[1]:.4f}")
+
+        with compare_cols[1]:
+            st.markdown("**Low-variance-space PCA**")
+            if color_by == "folder":
+                st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="folder")
+            elif color_by == "source_label":
+                st.scatter_chart(df_low_pca, x="pc1", y="pc2", color="source_label")
+            else:
+                st.scatter_chart(df_low_pca, x="pc1", y="pc2")
+            st.caption(
+                f"Explained variance (PC1/PC2): {low_explained[0]:.4f}, {low_explained[1]:.4f}"
+            )
+
+        compare_high_cols = st.columns(2)
+        with compare_high_cols[0]:
+            st.markdown("**Full-space PCA (reference)**")
+            if color_by == "folder":
+                st.scatter_chart(df_pca, x="pc1", y="pc2", color="folder")
+            elif color_by == "source_label":
+                st.scatter_chart(df_pca, x="pc1", y="pc2", color="source_label")
+            else:
+                st.scatter_chart(df_pca, x="pc1", y="pc2")
+            st.caption(f"Explained variance (PC1/PC2): {explained[0]:.4f}, {explained[1]:.4f}")
+
+        with compare_high_cols[1]:
+            st.markdown("**High-variance-space PCA**")
+            if color_by == "folder":
+                st.scatter_chart(df_high_pca, x="pc1", y="pc2", color="folder")
+            elif color_by == "source_label":
+                st.scatter_chart(df_high_pca, x="pc1", y="pc2", color="source_label")
+            else:
+                st.scatter_chart(df_high_pca, x="pc1", y="pc2")
+            st.caption(
+                f"Explained variance (PC1/PC2): {high_explained[0]:.4f}, {high_explained[1]:.4f}"
+            )
+
+        with st.expander("Raw PCA samples (first 200 rows)"):
+            left, right, third = st.columns(3)
+            with left:
+                st.markdown("**Full-space PCA**")
+                st.dataframe(df_pca.head(200), use_container_width=True)
+            with right:
+                st.markdown("**Low-variance-space PCA**")
+                st.dataframe(df_low_pca.head(200), use_container_width=True)
+            with third:
+                st.markdown("**High-variance-space PCA**")
+                st.dataframe(df_high_pca.head(200), use_container_width=True)
 
     # Render section help and debug state *after* all buttons have had
     # a chance to update active_help_section in this run.
